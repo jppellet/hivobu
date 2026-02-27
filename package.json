@@ -1,0 +1,48 @@
+{
+  "name": "castor-unplugged",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "Jean-Philippe Pellet",
+  "main": "index.js",
+  "scripts": {
+    "compile": "tsc -p tsconfig.json",
+    "compile-watch": "tsc -p tsconfig.json --watch",
+    "bundle": "./tools/build.js",
+    "bundle-watch": "npm-watch bundle",
+    "deploy": "./tools/deploy-jpp.sh",
+    "server": "./tools/local_server.py 8089"
+  },
+  "watch": {
+    "bundle": {
+      "patterns": [
+        "web"
+      ],
+      "extensions": "ts"
+    },
+    "lint": {
+      "patterns": [
+        "web"
+      ],
+      "extensions": "ts"
+    },
+    "testfiles": {
+      "patterns": [
+        "sample_src"
+      ],
+      "extensions": "py"
+    }
+  },
+  "devDependencies": {
+    "@types/codemirror": "^5.60.17",
+    "@types/node": "^25.2.1",
+    "esbuild": "^0.27.3",
+    "eslint": "^10.0.0",
+    "npm-watch": "^0.13.0",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "codemirror": "^6.0.2",
+    "lz-string": "^1.5.0"
+  }
+}
