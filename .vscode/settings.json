@@ -1,0 +1,31 @@
+{
+    "restoreTerminals.terminals": [
+        {
+            "splitTerminals": [
+                {
+                    "name": "compile",
+                    "commands": [
+                        "npm run compile-watch"
+                    ]
+                },
+                {
+                    "name": "bundle",
+                    "commands": [
+                        "npm run bundle-watch"
+                    ]
+                },
+                {
+                    "name": "server",
+                    "commands": [
+                        "npm run server"
+                    ]
+                },
+                {
+                    "name": "bash",
+                    "commands": [
+                        "ls"
+                    ]
+                },
+        }
+    ]
+}

@@ -6,35 +6,35 @@
 
 import * as LZString from "lz-string"
 
-
 type Point = { x: number, y: number }
 type SizeAndCenter = { w: number, h: number, relativeCenter: Point }
 
 const ObjsDict = {
-    "tri": { w: 10, h: 8.7, relativeCenter: { x: 5, y: 5.8 }, defaultFill: "#ffff5c" },
-    "dem": { w: 10, h: 5, relativeCenter: { x: 5, y: 2.5 }, defaultFill: "#a2d0f1" },
-    "ova": { w: 5, h: 10, relativeCenter: { x: 2.5, y: 5 }, defaultFill: "#fbd7f0" },
-    "rec": { w: 3, h: 10, relativeCenter: { x: 1.5, y: 5 }, defaultFill: "#2a7809" },
-    "car": { w: 10, h: 10, relativeCenter: { x: 5, y: 5 }, defaultFill: "#9ded99" },
-    "fer": { w: 10, h: 10, relativeCenter: { x: 5, y: 5 }, defaultFill: "#909090" },
-    "vid": { w: 10, h: 10, relativeCenter: { x: 5, y: 5 }, defaultFill: "#00000000" },
-} as const satisfies Record<string, SizeAndCenter & { defaultFill: string }>
+    "car": { w: 10, h: 10, relativeCenter: { x: 5, y: 5 } },
+    "tri": { w: 10, h: 8.7, relativeCenter: { x: 5, y: 5.8 } },
+    "ron": { w: 10, h: 10, relativeCenter: { x: 5, y: 5 } },
+    "cro": { w: 10, h: 10, relativeCenter: { x: 5, y: 5 } },
+    "dem": { w: 10, h: 5, relativeCenter: { x: 5, y: 2.5 } },
+    "ova": { w: 5, h: 10, relativeCenter: { x: 2.5, y: 5 } },
+    "rec": { w: 3, h: 10, relativeCenter: { x: 1.5, y: 5 } },
+    "fer": { w: 10, h: 10, relativeCenter: { x: 5, y: 5 } },
+    "vid": { w: 10, h: 10, relativeCenter: { x: 5, y: 5 } },
+} as const satisfies Record<string, SizeAndCenter>
 type Obj = keyof typeof ObjsDict
 const Objs = Object.keys(ObjsDict) as readonly Obj[]
-
-type Context = Record<string, any>
+const EmptyObj: Obj = "vid"
 
 const PosesDict = {
-    "emp": (first, second, ctx) => undefined,
+    "emp": { primary: true },
 
-    "soud": (first, second, ctx) => undefined,
-    "soug": (first, second, ctx) => undefined,
-    "sou": (first, second, ctx) => undefined,
+    "sod": { primary: false },
+    "sog": { primary: false },
+    "sou": { primary: true },
 
-    "coth": (first, second, ctx) => undefined,
-    "cotb": (first, second, ctx) => undefined,
-    "cot": (first, second, ctx) => undefined,
-} as const satisfies Record<string, (first: AST, second: AST, ctx: Context) => any>
+    "coh": { primary: false },
+    "cob": { primary: false },
+    "cot": { primary: true },
+} as const satisfies Record<string, { primary: boolean }>
 type Pose = keyof typeof PosesDict
 const Poses = Object.keys(PosesDict) as readonly Pose[]
 
@@ -44,11 +44,11 @@ type Angle = typeof Angles[number]
 const SIZE_FACTOR = 2 // Math.sqrt(2)
 
 const SizesDict = {
-    "-": 1 / SIZE_FACTOR,
+    "–": 1 / SIZE_FACTOR,
     "+": SIZE_FACTOR,
-    "s": 1 / SIZE_FACTOR,
-    "m": 1,
-    "l": SIZE_FACTOR,
+    // "s": 1 / SIZE_FACTOR,
+    // "m": 1,
+    // "l": SIZE_FACTOR,
 } as const satisfies Record<string, number>
 type Size = keyof typeof SizesDict
 const Sizes = Object.keys(SizesDict) as readonly Size[]
@@ -59,10 +59,11 @@ type AST = (
     | { _type: 'col'; token: ParsedToken<Color>; arg: AST }
     | { _type: 'rot'; token: ParsedToken<Angle>; arg: AST }
     | { _type: 'size'; token: ParsedToken<Size>; arg: AST }
+    | { _type: 'call'; token: ParsedToken<string>; def: AST }
 ) & {
     builtObjElem: HTMLElement
     cachedSize?: SizeAndCenter,
-    svgElem?: SVGElement,
+    svgElems: SVGElement[],
 }
 
 type ASTType = AST["_type"]
@@ -79,31 +80,31 @@ function isCSTOnlyType(type: string): type is CSTOnlyType {
 }
 
 type Arity<T extends ASTType | CSTOnlyType> =
-    T extends 'obj' ? 0 :
+    T extends 'obj' | 'call' ? 0 :
     T extends 'pose' ? 2 :
     T extends 'col' | 'rot' | 'size' ? 1 :
     T extends CSTOnlyType ? 0 :
     never
 
 const ColorDict = {
-    "jaune": "yellow",
-    "bleuclair": "lightblue",
-    "bleu": "blue",
-    "cyan": "cyan",
-    "vertclair": "lightgreen",
-    "vert": "green",
-    "orange": "orange",
-    "rose": "pink",
-    "gris": "gray",
-    "rouge": "red",
-    "blanc": "white",
-    "noir": "black",
-    "magenta": "magenta",
-    "beige": "beige",
+    "jau": "yellow",
+    // "blc": "lightblue",
+    "ble": "blue",
+    // "cyan": "cyan",
+    // "vertclair": "lightgreen",
+    "ver": "green",
+    "ora": "orange",
+    "ros": "pink",
+    "gri": "gray",
+    "rou": "red",
+    "bla": "white",
+    "noi": "black",
+    "mag": "magenta",
+    "bei": "beige", // #FDF3D0
+    "vio": "indigo",
 } as const satisfies Record<string, string>
 type Color = keyof typeof ColorDict
 const Colors = Object.keys(ColorDict) as readonly Color[]
-const ColorChar = "@"
 
 const NoOps = [" ", " ", "\t", "\n", "(", ")"] as const
 
@@ -116,28 +117,26 @@ class ParseError extends Error {
 
 type ParsedToken<T extends string = string> = { str: T, range: { pos: number, len: number }, elem: HTMLElement }
 
+function isAST(obj: boolean | AST | undefined): obj is AST {
+    return obj !== undefined && typeof obj === "object" && "_type" in obj
+}
 
-function parse(input: string, lib: Record<string, AST> = {}): [AST, WeakMap<HTMLElement, AST>] {
-
-    console.log(`Parsing input: '${input}'`)
+function parse(input: string, baseLib: Record<string, AST> = {}): [AST, WeakMap<HTMLElement, AST>] {
 
     const elemToAstMap: WeakMap<HTMLElement, AST> = new WeakMap()
-    const lines = input.toLowerCase().split(/\r?\n|;/)
-    const defs: Map<string, AST> = new Map(Object.entries(lib))
+    const lines = input.toLowerCase().replace(/-/g, "–").split(/\r?\n|;/)
+    const defs: Map<string, AST> = new Map(Object.entries(baseLib))
     const stack: AST[] = []
 
     let l = 0
     let c = 0
     let prevLinesOffset = 0
 
-    // const makePos = (len: number) => ({ line: l + 1, col: c + 1, len })
-    // const makePos = (len: number) => ({ pos: prevLinesOffset + c, len })
     const error = (message: string) => {
         throw new ParseError(prevLinesOffset + c, message)
     }
 
-
-    const tryMatchOneOf = <T extends ASTType | CSTOnlyType>(candidates: readonly TokenTypeForASTType<T>[], type: T, arity: Arity<T>, mustMatch: boolean = false, prepend: string = ""): boolean => {
+    const tryMatchOneOf = <T extends ASTType | CSTOnlyType>(candidates: Iterable<TokenTypeForASTType<T>>, type: T, arity: Arity<T>, mustMatch: boolean = false, prepend: string = ""): undefined | true | AST & { _type: T } => {
         for (const str of candidates) {
             if (input.startsWith(str, c)) {
                 // console.log(`At pos ${prevLinesOffset + c}, matched ${type} token '${str}'`)
@@ -145,72 +144,67 @@ function parse(input: string, lib: Record<string, AST> = {}): [AST, WeakMap<HTML
                 const range = { pos: prevLinesOffset + c, len: str.length }
                 const elem = document.createElement("span")
                 elem.classList.add("ast", type)
-                elem.innerHTML = prepend + str.replace(/\n/g, "<br>")
+                elem.innerHTML = prepend + capitalize(str.replace(/\n/g, "<br>"))
                 const parsedToken = { str, range, elem }
-                if (!isCSTOnlyType(type)) {
-                    const argsObj: { arg?: AST, first?: AST, second?: AST } = {}
-                    let builtObjElem: HTMLElement = elem
-                    if (arity === 0) {
-                        builtObjElem = elem
-                    } else {
-                        if (stack.length < arity) {
-                            return error(`Not enough operands for type ${type}, expected ${arity}, got ${stack.length}`)
-                        }
-                        if (arity === 1) {
-                            const arg = stack.pop()!
-                            argsObj.arg = arg
-                            builtObjElem = document.createElement("span")
-                            builtObjElem.classList.add("ast")
-                            builtObjElem.appendChild(arg.builtObjElem)
-                            builtObjElem.appendChild(elem)
-                        } else if (arity === 2) {
-                            const second = stack.pop()!
-                            const first = stack.pop()!
-                            argsObj.second = second
-                            argsObj.first = first
-                            builtObjElem = document.createElement("span")
-                            builtObjElem.classList.add("ast")
-                            builtObjElem.appendChild(first.builtObjElem)
-                            builtObjElem.appendChild(second.builtObjElem)
-                            builtObjElem.appendChild(elem)
-                        } else {
-                            return error(`Unsupported arity ${arity} for type ${type}`)
-                        }
-                    }
-                    const ast: AST = { _type: type, token: parsedToken, ...argsObj, builtObjElem } as any
-                    stack.push(ast)
-                    elemToAstMap.set(elem, ast)
+                if (isCSTOnlyType(type)) {
+                    return true
                 }
-                return true
-                // } else {
-                //     console.log(`At pos ${prevLinesOffset + c}, did not match ${type} token '${str}'`)
+                const argsObj: { arg?: AST, first?: AST, second?: AST } = {}
+                let builtObjElem: HTMLElement = elem
+                if (arity === 0) {
+                    builtObjElem = elem
+                } else {
+                    if (stack.length < arity) {
+                        return error(`Not enough operands for type ${type}, expected ${arity}, got ${stack.length}`)
+                    }
+                    if (arity === 1) {
+                        const arg = stack.pop()!
+                        argsObj.arg = arg
+                        builtObjElem = document.createElement("span")
+                        builtObjElem.classList.add("ast")
+                        builtObjElem.appendChild(arg.builtObjElem)
+                        builtObjElem.appendChild(elem)
+                    } else if (arity === 2) {
+                        const second = stack.pop()!
+                        const first = stack.pop()!
+                        argsObj.second = second
+                        argsObj.first = first
+                        builtObjElem = document.createElement("span")
+                        builtObjElem.classList.add("ast")
+                        builtObjElem.appendChild(first.builtObjElem)
+                        builtObjElem.appendChild(second.builtObjElem)
+                        builtObjElem.appendChild(elem)
+                    } else {
+                        return error(`Unsupported arity ${arity} for type ${type}`)
+                    }
+                }
+                const ast: AST & { _type: T } = { _type: type, token: parsedToken, ...argsObj, builtObjElem, svgElems: [] } as any
+                stack.push(ast)
+                elemToAstMap.set(elem, ast)
+                return ast
             }
         }
         if (mustMatch) {
-            return error(`Expected one of ${candidates.join(", ")} at position ${c}, got: ${input.slice(c)}`)
+            return error(`Expected one of ${[...candidates].join(", ")} at position ${c}, got: ${input.slice(c)}`)
         }
-        return false
+        return undefined
     }
 
     const parseExpr = (input: string): AST => {
+        let ast
         while (c < input.length) {
             if (tryMatchOneOf(NoOps, "noop", 0))
                 continue
 
-            if (tryMatchOneOf([ColorChar], "colchar", 0)) {
-                tryMatchOneOf(Colors, "col", 1, true, ColorChar)
+            if (tryMatchOneOf(Objs, "obj", 0))
+                continue
+
+            if (isAST(ast = tryMatchOneOf(defs.keys(), "call", 0))) {
+                ast.def = defs.get(ast.token.str)!
                 continue
             }
 
-            // for (const [name, ast] of defs) {
-            //     if (input.startsWith(name, c)) {
-            //         stack.push({ ...ast, tokenRange: makePos(name.length) })
-            //         c += name.length
-            //         continue outer
-            //     }
-            // }
-
-            if (tryMatchOneOf(Objs, "obj", 0))
+            if (tryMatchOneOf(Colors, "col", 1))
                 continue
 
             if (tryMatchOneOf(Poses, "pose", 2))
@@ -243,6 +237,7 @@ function parse(input: string, lib: Record<string, AST> = {}): [AST, WeakMap<HTML
         if (defs.has(name)) {
             return error(`Duplicate definition for ${name}`)
         }
+
         defs.set(name, parseExpr(expr))
     }
 
@@ -258,7 +253,7 @@ function parse(input: string, lib: Record<string, AST> = {}): [AST, WeakMap<HTML
                 parseDef(line)
             } else {
                 const ast = parseExpr(line)
-                console.log("Final AST:", ast)
+                // console.log("Final AST:", ast)
                 return [ast, elemToAstMap]
             }
         }
@@ -268,6 +263,48 @@ function parse(input: string, lib: Record<string, AST> = {}): [AST, WeakMap<HTML
     return error(`No expression found in input`)
 }
 
+function fallbackParse(input: string): HTMLElement {
+    const lines = input.split(/\r?\n|;/)
+    const containerSpan = document.createElement("span")
+    const push = (token: string) => {
+        const tokenSpan = document.createElement("span")
+        tokenSpan.classList.add("ast", "fallback")
+        tokenSpan.textContent = token
+        containerSpan.appendChild(tokenSpan)
+    }
+    for (let l = 0; l < lines.length; l++) {
+        const line = lines[l].trim()
+
+        if (line.length === 0) continue
+
+        let buf = ""
+        const flushBuf = () => {
+            if (buf.length > 0) {
+                push(buf)
+                buf = ""
+            }
+        }
+        for (let c = 0; c < line.length; c++) {
+            const char = line[c]
+            const isLower = char >= "a" && char <= "z"
+            const isWhitespace = char === " " || char === "\t"
+            if (buf.length === 3 || !(isLower || isWhitespace)) {
+                flushBuf()
+            }
+            buf += char
+        }
+
+        flushBuf()
+
+        if (l < lines.length - 1) {
+            containerSpan.appendChild(document.createElement("br"))
+        }
+    }
+
+    console.log("Fallback parsed input:", containerSpan.outerHTML)
+    return containerSpan
+}
+
 function capitalize(s: string): string {
     return s.charAt(0).toUpperCase() + s.slice(1)
 }
@@ -275,7 +312,8 @@ function capitalize(s: string): string {
 function pretty(ast: AST, parensIfComplex?: boolean): string {
     switch (ast._type) {
         case 'obj':
-            return `<span style="text-decoration: underline;">${capitalize(ast.token.str)}</span>`
+        case 'call':
+            return `<span style="">${capitalize(ast.token.str)}</span>`
         case 'pose': {
             const repr = `${pretty(ast.first, true)} ${pretty(ast.second, true)} <span style="font-weight: bold;">${capitalize(ast.token.str)}</span>`
             if (parensIfComplex) return `(${repr})`
@@ -293,8 +331,10 @@ function pretty(ast: AST, parensIfComplex?: boolean): string {
         }
         case 'size':
             return `${pretty(ast.arg, true)}<span style="font-weight: bold;">${ast.token.str}</span>`
-        case 'col':
-            return `${pretty(ast.arg, true)}<span style="font-style: italic;">@${capitalize(ast.token.str)}</span>`
+        case 'col': {
+            const cssColor = ColorDict[ast.token.str]
+            return `${pretty(ast.arg, true)}<span style="font-style: italic; padding: 0 0.2ex 0 0.1ex; margin-left: 0.1ex; border: 3px solid ${cssColor}">${capitalize(ast.token.str)}</span>`
+        }
     }
 }
 
@@ -303,6 +343,8 @@ function sizeOf(ast: AST): SizeAndCenter {
     if (!ast.cachedSize) {
         ast.cachedSize = ((): SizeAndCenter => {
             switch (ast._type) {
+                case 'call':
+                    return sizeOf(ast.def)
                 case 'obj':
                     return ObjsDict[ast.token.str]
                 case 'pose': {
@@ -322,13 +364,13 @@ function sizeOf(ast: AST): SizeAndCenter {
                                 }
                             }
                         case 'sou':
-                        case 'soud':
-                        case "soug": {
+                        case 'sod':
+                        case "sog": {
                             const relativeCenterX = (() => {
                                 switch (pose) {
                                     case 'sou': return Math.max(firstSize.relativeCenter.x, secondSize.relativeCenter.x)
-                                    case 'soug': return Math.min(firstSize.relativeCenter.x, secondSize.relativeCenter.x)
-                                    case 'soud': return firstSize.w > secondSize.w
+                                    case 'sog': return Math.min(firstSize.relativeCenter.x, secondSize.relativeCenter.x)
+                                    case 'sod': return firstSize.w > secondSize.w
                                         ? firstSize.w - (secondSize.w - secondSize.relativeCenter.x)
                                         : secondSize.w - (firstSize.w - firstSize.relativeCenter.x)
                                 }
@@ -343,8 +385,8 @@ function sizeOf(ast: AST): SizeAndCenter {
                             }
                         }
                         case 'cot':
-                        case "cotb":
-                        case "coth":
+                        case "cob":
+                        case "coh":
                             return {
                                 w: firstSize.w + secondSize.w,
                                 h: newHeightDefault,
@@ -461,11 +503,12 @@ function svgEmpty() {
     return makeSvgElem("g", {})
 }
 
-function svgGroup(children: SVGElement[], transform?: string, className?: string): SVGGElement {
+function svgGroup(children: SVGElement | SVGElement[], transform?: string, className?: string): SVGGElement {
     const group = makeSvgElem("g", {
         class: className,
         transform,
     })
+    children = Array.isArray(children) ? children : [children]
     for (const child of children) {
         group.appendChild(child)
     }
@@ -485,11 +528,13 @@ function astToSVG(ast: AST): SVGSVGElement {
 
     function render(ast: AST): SVGElement {
         const svgElem = doRender()
-        ast.svgElem = svgElem
+        ast.svgElems.push(svgElem)
         return svgElem
 
         function doRender(): SVGElement {
             switch (ast._type) {
+                case 'call':
+                    return render(ast.def)
                 case 'obj': {
                     const obj = ast.token.str
                     const def = ObjsDict[obj]
@@ -497,18 +542,26 @@ function astToSVG(ast: AST): SVGSVGElement {
                     const translation = `translate(${-def.relativeCenter.x} ${-def.relativeCenter.y})`
                     const objSvg: SVGElement = (() => {
                         switch (obj) {
+                            case "car":
                             case "rec":
                                 return svgRect(obj, 0, 0, def.w, def.h, translation)
-                            case "tri":
-                                return svgPolygon(obj, [{ x: 0, y: def.h }, { x: def.w, y: def.h }, { x: def.w / 2, y: 0 }], translation)
-                            case "car":
-                                return svgRect(obj, 0, 0, def.w, def.h, translation)
-                            case "dem":
-                                return svgPath(obj, `M 0 ${def.h} A ${def.w / 2} ${def.h} 0 0 1 ${def.w} ${def.h} L ${def.w} ${def.h} L 0 ${def.h} Z`, translation)
+                            case "ron":
                             case "ova":
                                 return svgEllipse(obj, def.w / 2, def.h / 2, def.w / 2, def.h / 2, translation)
+                            case "tri":
+                                return svgPolygon(obj, [{ x: 0, y: def.h }, { x: def.w, y: def.h }, { x: def.w / 2, y: 0 }], translation)
+                            case "dem":
+                                return svgPath(obj, `M 0 ${def.h} A ${def.w / 2} ${def.h} 0 0 1 ${def.w} ${def.h} L ${def.w} ${def.h} L 0 ${def.h} Z`, translation)
                             case "fer":
                                 return svgPolygon(obj, [{ x: def.w / 2, y: 0 }, { x: def.w, y: def.h }, { x: def.w / 2, y: def.h / 2 }, { x: 0, y: def.h }], translation)
+                            case "cro": {
+                                const thickness = 1 / 3.15
+                                const x1 = def.w * thickness
+                                const x2 = def.w * (1 - thickness)
+                                const y1 = def.h * thickness
+                                const y2 = def.h * (1 - thickness)
+                                return svgPolygon(obj, [{ x: x1, y: 0 }, { x: x1, y: y1 }, { x: 0, y: y1 }, { x: 0, y: y2 }, { x: x1, y: y2 }, { x: x1, y: def.h }, { x: x2, y: def.h }, { x: x2, y: y2 }, { x: def.w, y: y2 }, { x: def.w, y: y1 }, { x: x2, y: y1 }, { x: x2, y: 0 }], translation)
+                            }
                             case "vid":
                                 return svgEmpty()
                         }
@@ -526,19 +579,19 @@ function astToSVG(ast: AST): SVGSVGElement {
                     switch (pose) {
                         case 'emp':
                             return svgGroup([
-                                svgGroup([firstSvg], undefined, "first"),
-                                svgGroup([secondSvg], undefined, "second"),
+                                svgGroup(firstSvg, undefined, "first"),
+                                svgGroup(secondSvg, undefined, "second"),
                             ], undefined, `pose ${pose}`)
 
                         case 'sou':
-                        case 'soug':
-                        case 'soud': {
+                        case 'sog':
+                        case 'sod': {
                             const combinedDy = firstSize.relativeCenter.y - combinedSize.relativeCenter.y
                             const [secondDx, combinedDx] = (() => {
                                 switch (pose) {
                                     case 'sou': return [0, 0]
-                                    case 'soug': return [- firstSize.relativeCenter.x + secondSize.relativeCenter.x, firstSize.relativeCenter.x - combinedSize.relativeCenter.x]
-                                    case 'soud': {
+                                    case 'sog': return [- firstSize.relativeCenter.x + secondSize.relativeCenter.x, firstSize.relativeCenter.x - combinedSize.relativeCenter.x]
+                                    case 'sod': {
                                         const combinedDx = firstSize.relativeCenter.x <= secondSize.relativeCenter.x ? 0 : firstSize.relativeCenter.x - combinedSize.relativeCenter.x
                                         return [firstSize.w - firstSize.relativeCenter.x - (secondSize.w - secondSize.relativeCenter.x), combinedDx]
                                     }
@@ -547,21 +600,21 @@ function astToSVG(ast: AST): SVGSVGElement {
                             const secondDy = firstSize.h - firstSize.relativeCenter.y + secondSize.relativeCenter.y
 
                             return svgGroup([
-                                svgGroup([firstSvg], undefined, "first"),
-                                svgGroup([
-                                    svgGroup([secondSvg], `translate(${secondDx} ${secondDy})`),
-                                ], undefined, "second"),
-                            ], `translate(${combinedDx} ${combinedDy})`, `pose ${pose.slice(0, 3)}`)
+                                svgGroup(firstSvg, undefined, "first"),
+                                svgGroup(
+                                    svgGroup(secondSvg, `translate(${secondDx} ${secondDy})`),
+                                    undefined, "second"),
+                            ], `translate(${combinedDx} ${combinedDy})`, `pose sou`)
                         }
                         case 'cot':
-                        case 'coth':
-                        case 'cotb': {
+                        case 'coh':
+                        case 'cob': {
                             const combinedDx = firstSize.relativeCenter.x - combinedSize.relativeCenter.x
                             const [secondDy, combinedDy] = (() => {
                                 switch (pose) {
                                     case 'cot': return [0, 0]
-                                    case 'coth': return [- firstSize.relativeCenter.y + secondSize.relativeCenter.y, firstSize.relativeCenter.y - combinedSize.relativeCenter.y]
-                                    case 'cotb': {
+                                    case 'coh': return [- firstSize.relativeCenter.y + secondSize.relativeCenter.y, firstSize.relativeCenter.y - combinedSize.relativeCenter.y]
+                                    case 'cob': {
                                         const combinedDy = firstSize.relativeCenter.y > secondSize.relativeCenter.y ? 0 : -firstSize.relativeCenter.y + combinedSize.relativeCenter.y
                                         return [firstSize.h - firstSize.relativeCenter.y - (secondSize.h - secondSize.relativeCenter.y), combinedDy]
                                     }
@@ -569,27 +622,34 @@ function astToSVG(ast: AST): SVGSVGElement {
                             })()
                             const secondDx = firstSize.w - firstSize.relativeCenter.x + secondSize.relativeCenter.x
                             return svgGroup([
-                                svgGroup([firstSvg], undefined, "first"),
-                                svgGroup([
-                                    svgGroup([secondSvg], `translate(${secondDx} ${secondDy})`),
-                                ], undefined, "second"),
-                            ], `translate(${combinedDx} ${combinedDy})`, `pose ${pose.slice(0, 3)}`)
+                                svgGroup(firstSvg, undefined, "first"),
+                                svgGroup(
+                                    svgGroup(secondSvg, `translate(${secondDx} ${secondDy})`),
+                                    undefined, "second"),
+                            ], `translate(${combinedDx} ${combinedDy})`, `pose cot`)
                         }
                     }
                 }
                 case 'rot': {
                     const angle = ast.token.str
-                    return svgGroup([render(ast.arg)], `rotate(${30 * parseInt(angle)})`, `rot${angle}`)
+                    return svgGroup(render(ast.arg), `rotate(${30 * parseInt(angle)})`, `rot${angle}`)
                 }
                 case 'size': {
                     const size = ast.token.str
                     const factor = SizesDict[size]
-                    return svgGroup([render(ast.arg)], `scale(${factor})`, `size${size}`)
+                    return svgGroup(render(ast.arg), `scale(${factor})`, `size${size}`)
                 }
                 case 'col': {
                     const color = ast.token.str
                     const cssColor = ColorDict[color]
-                    const group = svgGroup([render(ast.arg)], undefined, `col${color}`)
+                    const groupContent = render(ast.arg)
+                    groupContent.querySelectorAll(".obj").forEach(elem => {
+                        elem.classList.add("hascol")
+                        if (elem instanceof SVGElement) {
+                            elem.style.setProperty("--fillcolor", cssColor)
+                        }
+                    })
+                    const group = svgGroup(groupContent, undefined, `col${color}`)
                     group.style.setProperty("--fillcolor", cssColor)
                     return group
                 }
@@ -604,7 +664,7 @@ function astToSVG(ast: AST): SVGSVGElement {
     // const globalDx = 0
     // const globalDy = 0
     const centerFill = debug ? "red" : "none"
-    const objFillColor = "var(--fillcolor, var(--defaultcolor))"
+    const objFillColor = "var(--fillcolor, rgb(255 255 255 / 0.2))"
     const dropShadow = "drop-shadow(0px 0px 0.2px #0004)"
     const debugFrame = !debug ? svgEmpty()
         : svgGroup([
@@ -637,12 +697,14 @@ function astToSVG(ast: AST): SVGSVGElement {
         .cp.orig { fill: blue; }
         .obj {
             fill: ${objFillColor};
-            stroke-width: 0;/*.15;*/
+            stroke-width: 0;
             stroke: oklab(from ${objFillColor} calc(l * 0.85) a b / 0.3);
+            vector-effect: non-scaling-stroke;
         }
-        ${Object.entries(ObjsDict).map(([name, props]) =>
-        `.${name} { --defaultcolor: ${props.defaultFill}; }`
-    ).join("\n        ")}
+        .obj:not(.hascol) {
+            stroke-width: 2;
+            stroke: black;
+        }
 
 
 @keyframes pulse {
@@ -692,8 +754,24 @@ span.ast {
     margin: 0 0.1ex;
 }
 
+span.ast.pose {
+    font-weight: bold;
+}
+
+span.ast.size {
+    font-weight: bold;
+}
+
+span.ast.col {
+    font-style: italic;
+}
+
 span.ast.highlighted {
     border-bottom: 2px solid gray;
+}
+
+span.ast.highlighted_built {
+    border: 1px solid gray;
 }
 
 span.ast.highlighted_arg.arg {
@@ -726,10 +804,9 @@ span.ast.highlighted_arg.second {
     animation: emp 2s ease-in-out infinite;
 }
     `
-
     const svgChildren = [
         svgStyle,
-        svgGroup([render(ast)], `translate(${globalDx} ${globalDy})`, "shadow"),
+        svgGroup(render(ast), `translate(${globalDx} ${globalDy})`, "shadow"),
         debugFrame,
     ]
 
@@ -739,11 +816,6 @@ span.ast.highlighted_arg.second {
 
     return svg
 }
-
-// const lib = {
-//     "ron": parse("DemDem6Sou"),
-//     "cro": parse("Rec3RecEmp"),
-// }
 
 
 function gallery(...shapes: string[]): string {
@@ -757,6 +829,7 @@ function gallery(...shapes: string[]): string {
 
 function children(ast: AST): AST[] {
     switch (ast._type) {
+        case 'call':
         case 'obj':
             return []
         case 'pose':
@@ -880,30 +953,260 @@ function restoreSelectionOffsetsWithin(container: HTMLElement, start: number, en
     selection.addRange(range)
 }
 
+function parseNumericAttr(value: string | null): number | undefined {
+    if (!value) return undefined
+    const parsed = Number.parseFloat(value)
+    return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function svgRasterSize(svg: SVGSVGElement): { width: number, height: number } {
+    const viewBox = svg.viewBox.baseVal
+    const widthFromViewBox = viewBox && viewBox.width > 0 ? viewBox.width : undefined
+    const heightFromViewBox = viewBox && viewBox.height > 0 ? viewBox.height : undefined
+    const width = widthFromViewBox ?? parseNumericAttr(svg.getAttribute("width")) ?? 128
+    const height = heightFromViewBox ?? parseNumericAttr(svg.getAttribute("height")) ?? 128
+    return {
+        width: Math.max(1, Math.round(width)),
+        height: Math.max(1, Math.round(height)),
+    }
+}
+
+function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => {
+            if (!blob) {
+                reject(new Error("Unable to encode canvas as PNG"))
+                return
+            }
+            resolve(blob)
+        }, "image/png")
+    })
+}
+
+async function copySvgToClipboardAsImage(svg: SVGSVGElement): Promise<void> {
+    if (!navigator.clipboard || typeof ClipboardItem === "undefined") {
+        throw new Error("Clipboard image write is not supported in this browser")
+    }
+
+    const serialized = new XMLSerializer().serializeToString(svg)
+    const svgBlob = new Blob([serialized], { type: "image/svg+xml;charset=utf-8" })
+    let { width, height } = svgRasterSize(svg)
+    width *= 100
+    height *= 100
+
+    const imageUrl = URL.createObjectURL(svgBlob)
+    try {
+        const image = new Image()
+        const imageLoaded = new Promise<void>((resolve, reject) => {
+            image.onload = () => resolve()
+            image.onerror = () => reject(new Error("Failed to load SVG for rasterization"))
+        })
+        image.src = imageUrl
+        await imageLoaded
+
+        const canvas = document.createElement("canvas")
+        canvas.width = width
+        canvas.height = height
+        const context = canvas.getContext("2d")
+        if (!context) {
+            throw new Error("2D canvas context is unavailable")
+        }
+        context.drawImage(image, 0, 0, width, height)
+
+        const pngBlob = await canvasToPngBlob(canvas)
+        await navigator.clipboard.write([
+            new ClipboardItem({
+                "image/png": pngBlob,
+                "image/svg+xml": svgBlob,
+            })
+        ])
+    } finally {
+        URL.revokeObjectURL(imageUrl)
+    }
+}
+
 
 
 async function main() {
 
     const codeContainer = document.getElementById("code-container")
+    const cheatSheetContainer = document.getElementById("cheatsheet-container")
     const svgContainer = document.getElementById("svg-container")
     const prettyprintContainer = document.getElementById("prettyprint-container")
 
-    if (!codeContainer || !svgContainer || !prettyprintContainer) {
+    if (!codeContainer || !cheatSheetContainer || !svgContainer || !prettyprintContainer) {
         throw new Error("HTML containers not found")
     }
 
+    const toast = document.createElement("div")
+    toast.style.position = "fixed"
+    toast.style.right = "16px"
+    toast.style.bottom = "16px"
+    toast.style.padding = "8px 12px"
+    toast.style.borderRadius = "8px"
+    toast.style.font = "600 12px/1.2 ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif"
+    toast.style.color = "#fff"
+    toast.style.background = "#333"
+    toast.style.boxShadow = "0 8px 24px rgb(0 0 0 / 0.2)"
+    toast.style.opacity = "0"
+    toast.style.transform = "translateY(8px)"
+    toast.style.transition = "opacity 120ms ease, transform 120ms ease"
+    toast.style.pointerEvents = "none"
+    toast.style.zIndex = "9999"
+    document.body.appendChild(toast)
+
+    let toastTimeout: number | undefined
+    const showToast = (message: string, kind: "success" | "error" = "success") => {
+        toast.textContent = message
+        toast.style.background = kind === "success" ? "#1d6e2c" : "#a12828"
+        toast.style.opacity = "1"
+        toast.style.transform = "translateY(0)"
+        if (toastTimeout !== undefined) {
+            window.clearTimeout(toastTimeout)
+        }
+        toastTimeout = window.setTimeout(() => {
+            toast.style.opacity = "0"
+            toast.style.transform = "translateY(8px)"
+        }, 1400)
+    }
+
+    document.addEventListener("keydown", (event) => {
+        const isCopyRenderedSvgShortcut = event.metaKey
+            && event.shiftKey
+            && !event.ctrlKey
+            && !event.altKey
+            && event.key.toLowerCase() === "c"
+
+        if (!isCopyRenderedSvgShortcut) {
+            return
+        }
+
+        const renderedSvg = svgContainer.querySelector("svg")
+        if (!(renderedSvg instanceof SVGSVGElement)) {
+            showToast("No SVG to copy", "error")
+            return
+        }
+
+        event.preventDefault()
+        void copySvgToClipboardAsImage(renderedSvg)
+            .then(() => {
+                showToast("SVG copied as image")
+            })
+            .catch((error) => {
+                console.error("Could not copy rendered SVG to clipboard", error)
+                showToast("Copy failed", "error")
+            })
+    })
+
+    const smallSvgRender = (code: string): Element => {
+        const ast = parse(code)[0]
+        const svg = astToSVG(ast)
+        svg.classList.add("objpreview")
+        return svg
+    }
+
+    const unbreakableSpan = (content: string) => `<span style="white-space: nowrap;">${content}</span>`
+
+    const sep = `<span style="font-size:120%; padding: 0 1ex;"> </span>`
+    const colSpan = (colcode: Color) => `<span style="padding: 1px; border: 3px solid ${ColorDict[colcode]}">${capitalize(colcode)}</span>`
+    const objSpan = (objcode: string) => `<span>${capitalize(objcode)}${smallSvgRender(objcode + "Noi").outerHTML}</span>`
+    const objs = Object.keys(ObjsDict).filter(obj => obj !== EmptyObj)
+
+    const cheatSheetSections = [[
+        `<b>Formes:</b> ${objs.map(objSpan).join(" ")}`,
+        `<b>Poses:</b> ${Object.entries(PosesDict).filter(([_, v]) => v.primary).map(([k]) => capitalize(k)).join(" ")}`,
+    ], [
+        `<b>Couleurs:</b> ${Colors.map(colSpan).join(" ")}`,
+        `<b>Taille: </b> ${Sizes.join(" ")}`,
+        `<b>Rotation:</b > ${Angles.join(" ")}`,
+    ]]
+
+    cheatSheetContainer.innerHTML = cheatSheetSections.map(subsection => subsection.map(unbreakableSpan).join(sep)).join("<br>")
+
+    let currentAst: AST | undefined = undefined
+
+    const selectTokenInCode = (tokenElem: HTMLElement): void => {
+        if (!codeContainer.contains(tokenElem)) {
+            return
+        }
+        const range = document.createRange()
+        range.selectNodeContents(tokenElem)
+
+        const selection = document.getSelection()
+        if (!selection) {
+            return
+        }
+        selection.removeAllRanges()
+        selection.addRange(range)
+        codeContainer.focus()
+    }
+
+    const findAstGeneratingSvgElem = (svgElem: SVGElement): AST | undefined => {
+        if (!currentAst) {
+            return
+        }
+
+        let bestMatchAst: AST | undefined = undefined
+        let bestMatchDepth = -1
+
+        visit(currentAst, (node, depth) => {
+            const containsClickedShape = node.svgElems.some(nodeSvgElem =>
+                nodeSvgElem === svgElem || nodeSvgElem.contains(svgElem)
+            )
+            if (!containsClickedShape) {
+                return
+            }
+            if (depth >= bestMatchDepth) {
+                bestMatchDepth = depth
+                bestMatchAst = node
+            }
+        })
+
+        return bestMatchAst
+    }
+
+    document.addEventListener("pointerup", e => {
+        if ((e.target instanceof SVGElement) && e.target.classList.contains("obj")) {
+            const generatingAst = findAstGeneratingSvgElem(e.target)
+            if (!generatingAst) {
+                return
+            }
+            e.preventDefault()
+            e.stopPropagation()
+            selectTokenInCode(generatingAst.token.elem)
+        }
+    }, { capture: true })
+
     codeContainer.spellcheck = false
     codeContainer.addEventListener("input", () => {
-        renderAndShow(codeContainer.innerText)
+        renderAndShow(codeContainer.innerText, true)
     })
+    codeContainer.addEventListener('dblclick', e => {
+        const sel = window.getSelection()
+        if (!sel || !(e.target instanceof HTMLElement)) return
+        e.preventDefault()
+        e.stopPropagation()
+        sel.selectAllChildren(e.target)
+    }, { capture: true })
 
     const ArgKeys = ["arg", "first", "second"] as const
     type ArgType = typeof ArgKeys[number]
 
-    const findDependentHighlights = (span: HTMLElement): { svgElem?: SVGElement, args: [HTMLElement, ArgType][] } => {
+    const findDependentHighlights = (span: HTMLElement): { svgElems: SVGElement[], args: [HTMLElement, ArgType][], builtObj: HTMLElement | undefined } => {
         const ast = elemToAstMap.get(span)
-        if (!ast) return { args: [] }
-        const svgElem = ast.svgElem
+        if (!ast) return { svgElems: [], args: [], builtObj: undefined }
+
+        // if we are a unary op, try to go down to the built object to find highlights
+        let objAst: AST = ast
+        while ("arg" in objAst) {
+            objAst = objAst.arg
+        }
+        // revert if we are a pose, since poses are binary and highlight a move rather than children
+        if (objAst._type === "pose") {
+            objAst = ast
+        }
+
+        const svgElems = objAst.svgElems
 
         const args: [HTMLElement, ArgType][] = []
         for (const key of ArgKeys) {
@@ -912,7 +1215,9 @@ async function main() {
                 args.push([argAst.builtObjElem, key])
             }
         }
-        return { svgElem, args }
+        // only highlight built object if it's not the same as the current span
+        const builtObj = args.length === 0 ? undefined : ast.builtObjElem
+        return { svgElems, args, builtObj: builtObj }
     }
 
     let highlightedSpan: HTMLElement | undefined = undefined
@@ -920,12 +1225,15 @@ async function main() {
     const clearHighlights = () => {
         if (highlightedSpan) {
             highlightedSpan.classList.remove("highlighted")
-            const { svgElem, args } = findDependentHighlights(highlightedSpan)
-            if (svgElem) {
+            const { svgElems, args, builtObj } = findDependentHighlights(highlightedSpan)
+            for (const svgElem of svgElems) {
                 svgElem.classList.remove("highlighted")
             }
             for (const [argElem, argType] of args) {
                 argElem.classList.remove("highlighted_arg", argType)
+            }
+            if (builtObj) {
+                builtObj.classList.remove("highlighted_built")
             }
             highlightedSpan = undefined
         }
@@ -955,18 +1263,21 @@ async function main() {
         }
 
         const newHighlightedSpan = findSelectionNode()
-        console.log("Selection changed, element:", newHighlightedSpan)
+        // console.log("Selection changed, element:", newHighlightedSpan)
 
         if (newHighlightedSpan !== highlightedSpan) {
             clearHighlights()
             if (newHighlightedSpan) {
                 newHighlightedSpan.classList.add("highlighted")
-                const { svgElem, args } = findDependentHighlights(newHighlightedSpan)
-                if (svgElem) {
+                const { svgElems, args, builtObj } = findDependentHighlights(newHighlightedSpan)
+                for (const svgElem of svgElems) {
                     svgElem.classList.add("highlighted")
                 }
                 for (const [argElem, argType] of args) {
                     argElem.classList.add("highlighted_arg", argType)
+                }
+                if (builtObj) {
+                    builtObj.classList.add("highlighted_built")
                 }
             }
             highlightedSpan = newHighlightedSpan
@@ -980,7 +1291,7 @@ async function main() {
     let lastRenderedString = ""
     let elemToAstMap: WeakMap<HTMLElement, AST> = new WeakMap()
 
-    const renderAndShow = (code: string): void => {
+    const renderAndShow = (code: string, saveToState: boolean): void => {
         if (code === lastRenderedString) {
             return
         }
@@ -989,33 +1300,42 @@ async function main() {
         const previousSelection = getSelectionOffsetsWithin(codeContainer)
         let parseResult: [AST, WeakMap<HTMLElement, AST>] | undefined = undefined
 
-        try {
-            parseResult = parse(code)
-            console.log("Rendered")
-        } catch (e) {
-            if (e instanceof ParseError) {
-                console.log(`Parse error at position ${e.pos}: ${e.message}`)
-            } else {
-                throw e
-            }
-        }
-        if (parseResult) {
-            const [ast, newElemToAstMap] = parseResult
-            elemToAstMap = newElemToAstMap
-            prettyprintContainer.innerHTML = pretty(ast)
-            // printSizes(ast)
-            const svg = astToSVG(ast)
+        if (code.trim() === "") {
+            codeContainer.innerHTML = ""
             svgContainer.innerHTML = ""
-            svgContainer.appendChild(svg)
-
-            codeContainer.innerHTML = ""
-            console.log("AST for final code:", ast, ast.builtObjElem)
-            codeContainer.appendChild(ast.builtObjElem)
-        } else {
-            elemToAstMap = new WeakMap()
             prettyprintContainer.innerHTML = ""
-            codeContainer.innerHTML = ""
-            codeContainer.appendChild(document.createTextNode(code))
+            currentAst = undefined
+            elemToAstMap = new WeakMap()
+        } else {
+
+            try {
+                parseResult = parse(code)
+            } catch (e) {
+                if (e instanceof ParseError) {
+                    console.log(`Parse error at position ${e.pos}: ${e.message}`)
+                } else {
+                    throw e
+                }
+            }
+            if (parseResult) {
+                const [ast, newElemToAstMap] = parseResult
+                currentAst = ast
+                elemToAstMap = newElemToAstMap
+                prettyprintContainer.innerHTML = pretty(ast)
+                // printSizes(ast)
+                const svg = astToSVG(ast)
+                svgContainer.innerHTML = ""
+                svgContainer.appendChild(svg)
+
+                codeContainer.innerHTML = ""
+                console.log("AST for final code:", ast, ast.builtObjElem)
+                codeContainer.appendChild(ast.builtObjElem)
+            } else {
+                currentAst = undefined
+                elemToAstMap = new WeakMap()
+                codeContainer.innerHTML = ""
+                codeContainer.appendChild(fallbackParse(code))
+            }
         }
 
         if (previousSelection) {
@@ -1023,6 +1343,10 @@ async function main() {
         }
 
         lastRenderedString = code
+        if (saveToState) {
+            const isValidCode = parseResult !== undefined
+            saveToURL(code, isValidCode)
+        }
     }
 
     const snowman = "ron@blancsstri@rougesouron@beigeovaovacot@noirssempsou"
@@ -1031,17 +1355,47 @@ async function main() {
     const bee = "Dem@beigeova@noir-vidcot-EmpCar@orangeDem@bleuclair3-CothSoug"
     const all = gallery(snowman, flower, switzerland, bee)
 
-    let saveToURL: () => Promise<void>
+    let saveToURL: (code: string, isValidCode: boolean) => void
+    let lastSavedWasValid = true
 
-    saveToURL = async () => {
-        const userCode = codeContainer.innerText
-        const compressed = LZString.compressToEncodedURIComponent(userCode)
+    saveToURL = (code, isValidCode) => {
+        const compressed = LZString.compressToEncodedURIComponent(code)
         const url = new URL(window.location.href)
         url.searchParams.set('t', compressed)
-        window.history.replaceState({}, '', url.toString())
+        const usePush = !isValidCode && lastSavedWasValid
+        const method = usePush ? "pushState" : "replaceState"
+        console.log("saving", { valid: isValidCode, method, code })
+        window.history[method]({ code }, '', url.toString())
+        lastSavedWasValid = isValidCode
     }
 
-    renderAndShow(codeContainer.innerText)
+    window.addEventListener("popstate", (event) => {
+        if (event.state && typeof event.state.code === "string") {
+            console.log("Popstate event, loading code from state:", event.state.code)
+            renderAndShow(event.state.code, false)
+        }
+    })
+
+    const isFullScreen = new URL(window.location.href).searchParams.get('fs') === '1'
+    if (isFullScreen) {
+        cheatSheetContainer.style.display = "none"
+        prettyprintContainer.style.display = "none"
+        codeContainer.style.display = "none"
+    }
+
+    const loadFromURL = (): boolean => {
+        const compressed = new URL(window.location.href).searchParams.get('t')
+        if (compressed === null) return false
+        const decompressed = LZString.decompressFromEncodedURIComponent(compressed)
+        if (decompressed === null) return false
+        renderAndShow(decompressed, true)
+        return true
+    }
+
+    if (!loadFromURL()) {
+        renderAndShow(codeContainer.innerText, false)
+    }
 }
 
 document.addEventListener("DOMContentLoaded", main)
+
