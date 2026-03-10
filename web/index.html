@@ -12,12 +12,161 @@
             position: relative;
             top: -0.8ex;
         }
+
+        #code-container:focus {
+            outline: none;
+        }
+
+        .shadow {
+            -webkit-filter: drop-shadow(0px 0px 0.2px #0004);
+            filter: drop-shadow(0px 0px 0.2px #0004);
+        }
+
+        .cp {
+            fill: none;
+            stroke: none;
+        }
+
+        .cp.debug {
+            fill: red;
+            stroke: none;
+        }
+
+        .cp.orig {
+            fill: blue;
+        }
+
+        .obj {
+            fill: var(--fillcolor, rgb(255 255 255 / 0.2));
+            stroke-width: 0;
+            stroke: oklab(from var(--fillcolor, rgb(255 255 255 / 0.2)) calc(l * 0.85) a b / 0.3);
+            vector-effect: non-scaling-stroke;
+        }
+
+        .obj:not(.hascol) {
+            stroke-width: 2;
+            stroke: black;
+        }
+
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                fill: oklch(from var(--fillcolor, rgb(255 255 255 / 0.2)) calc(l * 0.8) c h);
+                /* darker */
+                /* opacity: 0.5; */
+            }
+
+            50% {
+                fill: oklch(from var(--fillcolor, rgb(255 255 255 / 0.2)) calc(l * 1.2) c h);
+                /* lighter */
+                /* opacity: 1; */
+            }
+        }
+
+        @keyframes cot {
+            0% {
+                transform: translate(10px, 0px);
+                opacity: 0;
+            }
+
+            25% {
+                transform: none;
+                opacity: 1;
+            }
+        }
+
+        @keyframes sou {
+            0% {
+                transform: translate(0px, 10px);
+                opacity: 0;
+            }
+
+            25% {
+                transform: none;
+                opacity: 1;
+            }
+        }
+
+        @keyframes emp {
+            0% {
+                stroke-width: 50;
+            }
+
+            25% {
+                stroke-width: 0;
+            }
+        }
+
+        span.ast.def {
+            font-size: 90%;
+        }
+
+        span.ast.assign {
+            margin: 0 0.3ex 0 0.5ex;
+        }
+
+        span.ast {
+            display: inline-block;
+            margin: 0 0.1ex;
+        }
+
+        span.ast.pose {
+            font-weight: bold;
+        }
+
+        span.ast.size {
+            font-weight: bold;
+        }
+
+        span.ast.col {
+            font-style: italic;
+        }
+
+        span.ast.highlighted {
+            border-bottom: 2px solid gray;
+        }
+
+        span.ast.highlighted_built {
+            border: 1px solid gray;
+        }
+
+        span.ast.highlighted_arg.arg {
+            background-color: rgba(228, 228, 228, 0.9);
+        }
+
+        span.ast.highlighted_arg.first {
+            background-color: rgba(214, 250, 255, 0.9);
+        }
+
+        span.ast.highlighted_arg.second {
+            background-color: rgba(253, 224, 255, 0.9);
+        }
+
+        .highlighted>*.obj {
+            animation: pulse 1s ease-in-out infinite;
+            stroke-width: 0.15;
+        }
+
+        .pose.right.highlighted>.second {
+            animation: cot 2s ease-in-out infinite;
+        }
+
+        .pose.bottom.highlighted>.second {
+            animation: sou 2s ease-in-out infinite;
+        }
+
+        .pose.stack.highlighted>.second *.obj {
+            stroke: var(--fillcolor, rgb(255 255 255 / 0.2));
+            animation: emp 2s ease-in-out infinite;
+        }
     </style>
 </head>
 
 <body style="height: 100vh; display: flex; flex-direction: column; margin: 0;">
     <script src="bundle.js"></script>
-    <div id="code-container" style="flex: 0 0 auto; overflow: auto; text-align: center; font-size: 16pt; font-family:Arial, Helvetica, sans-serif" contenteditable></div>
+    <div id="code-container" style="flex: 0 0 auto; overflow: auto; text-align: center; font-size: 16pt; font-family:Arial, Helvetica, sans-serif; position:relative" contenteditable></div>
     <div id="svg-container" style="flex: 1 1 0; min-height: 0; overflow: auto; display: flex;"></div>
     <div id="prettyprint-container" style="flex: 0 0 auto; overflow: auto; text-align: center; font-family: sans-serif; font-size: 14pt; padding: 12px 5px;"></div>
     <div id="cheatsheet-container" style="flex: 0 0 auto; overflow: auto; text-align: center; font-size: 11pt; line-height: 2; padding: 12px 5px; background: #F0F0F0; border-top: 2px solid lightgrey; font-family:Arial, Helvetica, sans-serif"></div>

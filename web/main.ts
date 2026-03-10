@@ -33,6 +33,7 @@ class Dialect {
     constructor(
         public readonly name: string,
         public readonly ObjsDict: Record<string, SizeAndCenter & ObjDef>,
+        public readonly emptyObj: string,
         public readonly precolored: boolean,
         public readonly mkPreviewString: (obj: string) => string,
         public readonly PoseDict: Record<string, { poseCode: PoseCode, primary?: boolean, invertArgs?: boolean }>,
@@ -166,6 +167,7 @@ export const DialectDefault = new Dialect(
             hidden: true,
         }
     },
+    "vid",
     false,
     code => code + "noi",
     {
@@ -234,6 +236,7 @@ export const DialectHivobu = new Dialect(
             hidden: true,
         },
     },
+    "vid",
     true,
     code => code,
     {
@@ -244,25 +247,23 @@ export const DialectHivobu = new Dialect(
 
 type ASTCommon = {
     dialect: Dialect,
+    token: string,
+    srcElem: HTMLElement,
     builtObjElem: HTMLElement
     cachedSize?: SizeAndCenter,
     svgElems: SVGElement[],
 }
 
 type AST = (
-    | { _type: 'obj'; token: ParsedToken }
-    | { _type: 'pose'; token: ParsedToken; first: AST; second: AST }
-    | { _type: 'col'; token: ParsedToken; arg: AST }
-    | { _type: 'rot'; token: ParsedToken; arg: AST }
-    | { _type: 'size'; token: ParsedToken; arg: AST }
-    | { _type: 'call'; token: ParsedToken; def: AST }
+    | { _type: 'obj' }
+    | { _type: 'pose'; first: AST; second: AST }
+    | { _type: 'col'; arg: AST }
+    | { _type: 'rot'; arg: AST }
+    | { _type: 'size'; arg: AST }
+    | { _type: 'call'; def: AST }
 ) & ASTCommon
 
 type ASTType = AST["_type"]
-
-type TokenTypeForASTType<T extends ASTType | CSTOnlyType> =
-    T extends CSTOnlyType ? string :
-    Extract<AST, { _type: T }>["token"]["str"]
 
 const CSTOnlyTypes = ["noop", "colchar"] as const
 type CSTOnlyType = typeof CSTOnlyTypes[number]
@@ -287,116 +288,135 @@ class ParseError extends Error {
     }
 }
 
-type ParsedToken = { str: string, range: { pos: number, len: number }, elem: HTMLElement }
-
 function isAST(obj: boolean | AST | undefined): obj is AST {
     return obj !== undefined && typeof obj === "object" && "_type" in obj
 }
 
-function parse(input: string, dialect: Dialect): [AST, WeakMap<HTMLElement, AST>] {
+function parse(userCode: string, dialect: Dialect): [AST, HTMLElement[], WeakMap<HTMLElement, AST>] {
 
+    const htmlElements: HTMLElement[] = []
     const elemToAstMap: WeakMap<HTMLElement, AST> = new WeakMap()
-    const lines = input.toLowerCase().replace(/-/g, "–").split(/\r?\n|;/)
+    const lines = userCode.toLowerCase().replace(/-/g, "–").split(/\r?\n|;/)
     const defs: Map<string, AST> = new Map()
     const stack: AST[] = []
 
     let l = 0
     let c = 0
     let prevLinesOffset = 0
+    let currentLine: string
 
     const error = (message: string) => {
         throw new ParseError(prevLinesOffset + c, message)
     }
 
-    const tryMatchOneOf = <T extends ASTType | CSTOnlyType>(candidates: Iterable<TokenTypeForASTType<T>>, type: T, arity: Arity<T>, opts?: { mustMatch?: boolean, prepend?: string, argOrderDict?: Record<string, { invertArgs?: boolean }> }): undefined | true | AST & { _type: T } => {
-        for (const str of candidates) {
-            if (input.startsWith(str, c)) {
-                // console.log(`At pos ${prevLinesOffset + c}, matched ${type} token '${str}'`)
-                c += str.length
-                const range = { pos: prevLinesOffset + c, len: str.length }
-                const elem = document.createElement("span")
-                elem.classList.add("ast", type)
-                elem.innerHTML = (opts?.prepend ?? "") + capitalize(str.replace(/\n/g, "<br>"))
-                const parsedToken = { str, range, elem }
-                if (isCSTOnlyType(type)) {
-                    return true
+    const tryMatchFrom = <T extends ASTType | CSTOnlyType>(candidates: Iterable<string>, type: T, arity: Arity<T>, opts?: { longest?: boolean, mustMatch?: boolean, prepend?: string, argOrderDict?: Record<string, { invertArgs?: boolean }> }): undefined | true | AST & { _type: T } => {
+
+        let token: string | undefined = undefined
+        if (opts?.longest) {
+            let best = ""
+            for (const candidate of candidates) {
+                if (currentLine.startsWith(candidate, c) && candidate.length > best.length) {
+                    best = candidate
                 }
-                const argsObj: { arg?: AST, first?: AST, second?: AST } = {}
-                let builtObjElem: HTMLElement = elem
-                if (arity === 0) {
-                    builtObjElem = elem
-                } else {
-                    if (stack.length < arity) {
-                        return error(`Not enough operands for type ${type}, expected ${arity}, got ${stack.length}`)
-                    }
-                    if (arity === 1) {
-                        const arg = stack.pop()!
-                        argsObj.arg = arg
-                        builtObjElem = document.createElement("span")
-                        builtObjElem.classList.add("ast")
-                        builtObjElem.appendChild(arg.builtObjElem)
-                        builtObjElem.appendChild(elem)
-                    } else if (arity === 2) {
-                        const cstSecond = stack.pop()!
-                        const cstFirst = stack.pop()!
-                        const invertArgs = opts?.argOrderDict && str in opts.argOrderDict && opts.argOrderDict[str].invertArgs
-                        console.log("argOrderDict", opts?.argOrderDict)
-                        if (invertArgs) {
-                            argsObj.second = cstFirst
-                            argsObj.first = cstSecond
-                        } else {
-                            argsObj.second = cstSecond
-                            argsObj.first = cstFirst
-                        }
-                        builtObjElem = document.createElement("span")
-                        builtObjElem.classList.add("ast")
-                        builtObjElem.appendChild(cstFirst.builtObjElem)
-                        builtObjElem.appendChild(cstSecond.builtObjElem)
-                        builtObjElem.appendChild(elem)
-                    } else {
-                        return error(`Unsupported arity ${arity} for type ${type}`)
-                    }
+            }
+            if (best.length !== 0) {
+                token = best
+            }
+        } else {
+            for (const candidate of candidates) {
+                if (currentLine.startsWith(candidate, c)) {
+                    token = candidate
+                    break
                 }
-                const common: ASTCommon = { dialect, builtObjElem, svgElems: [] }
-                const ast: AST & { _type: T } = { _type: type, token: parsedToken, ...argsObj, ...common } as any
-                stack.push(ast)
-                elemToAstMap.set(elem, ast)
-                return ast
             }
         }
+
+        if (token !== undefined) {
+            // console.log(`At pos ${prevLinesOffset + c}, matched ${type} token '${match}'`)
+            c += token.length
+            // const range = { pos: prevLinesOffset + c, len: match.length }
+            const srcElem = document.createElement("span")
+            srcElem.classList.add("ast", type)
+            srcElem.innerHTML = (opts?.prepend ?? "") + capitalize(token.replace(/\n/g, "<br>"))
+            if (isCSTOnlyType(type)) {
+                return true
+            }
+            const argsObj: { arg?: AST, first?: AST, second?: AST } = {}
+            let builtObjElem: HTMLElement = srcElem
+            if (arity === 0) {
+                builtObjElem = srcElem
+            } else {
+                if (stack.length < arity) {
+                    return error(`Not enough operands for type ${type}, expected ${arity}, got ${stack.length}`)
+                }
+                if (arity === 1) {
+                    const arg = stack.pop()!
+                    argsObj.arg = arg
+                    builtObjElem = document.createElement("span")
+                    builtObjElem.classList.add("ast")
+                    builtObjElem.appendChild(arg.builtObjElem)
+                    builtObjElem.appendChild(srcElem)
+                } else if (arity === 2) {
+                    const cstSecond = stack.pop()!
+                    const cstFirst = stack.pop()!
+                    const invertArgs = opts?.argOrderDict && token in opts.argOrderDict && opts.argOrderDict[token].invertArgs
+                    console.log("argOrderDict", opts?.argOrderDict)
+                    if (invertArgs) {
+                        argsObj.second = cstFirst
+                        argsObj.first = cstSecond
+                    } else {
+                        argsObj.second = cstSecond
+                        argsObj.first = cstFirst
+                    }
+                    builtObjElem = document.createElement("span")
+                    builtObjElem.classList.add("ast")
+                    builtObjElem.appendChild(cstFirst.builtObjElem)
+                    builtObjElem.appendChild(cstSecond.builtObjElem)
+                    builtObjElem.appendChild(srcElem)
+                } else {
+                    return error(`Unsupported arity ${arity} for type ${type}`)
+                }
+            }
+            const common: ASTCommon = { token, srcElem, dialect, builtObjElem, svgElems: [] }
+            const ast: AST & { _type: T } = { _type: type, ...argsObj, ...common } as any
+            stack.push(ast)
+            elemToAstMap.set(srcElem, ast)
+            return ast
+        }
+
         if (opts?.mustMatch) {
-            return error(`Expected one of ${[...candidates].join(", ")} at position ${c}, got: ${input.slice(c)}`)
+            return error(`Expected one of ${[...candidates].join(", ")} at position ${c}, got: ${currentLine.slice(c)}`)
         }
         return undefined
     }
 
-    const parseExpr = (input: string): AST => {
+    const parseExpr = (): AST => {
         let ast
-        while (c < input.length) {
-            if (tryMatchOneOf(NoOps, "noop", 0))
+        while (c < currentLine.length) {
+            if (tryMatchFrom(NoOps, "noop", 0))
                 continue
 
-            if (tryMatchOneOf(dialect.Objs, "obj", 0))
-                continue
-
-            if (isAST(ast = tryMatchOneOf(defs.keys(), "call", 0))) {
-                ast.def = defs.get(ast.token.str)!
+            if (isAST(ast = tryMatchFrom(defs.keys(), "call", 0, { longest: true }))) {
+                ast.def = defs.get(ast.token)!
                 continue
             }
 
-            if (tryMatchOneOf(dialect.Colors, "col", 1))
+            if (tryMatchFrom(dialect.Objs, "obj", 0))
                 continue
 
-            if (tryMatchOneOf(dialect.Poses, "pose", 2, { argOrderDict: dialect.PoseDict }))
+            if (tryMatchFrom(dialect.Colors, "col", 1))
                 continue
 
-            if (tryMatchOneOf(dialect.Angles, "rot", 1))
+            if (tryMatchFrom(dialect.Poses, "pose", 2, { argOrderDict: dialect.PoseDict }))
                 continue
 
-            if (tryMatchOneOf(dialect.Sizes, "size", 1))
+            if (tryMatchFrom(dialect.Angles, "rot", 1))
                 continue
 
-            return error(`Unknown token at position ${c}: ${input.slice(c)}`)
+            if (tryMatchFrom(dialect.Sizes, "size", 1))
+                continue
+
+            return error(`Unknown token at position ${c}: ${currentLine.slice(c)}`)
         }
 
         if (stack.length !== 1) {
@@ -404,43 +424,64 @@ function parse(input: string, dialect: Dialect): [AST, WeakMap<HTMLElement, AST>
         }
 
         const expr = stack.pop()!
-        console.log("Parsed expression:", expr)
         return expr
     }
 
-    const parseDef = (input: string): void => {
-        let [name, expr] = input.split("=").map(s => s.trim())
-        if (!name || !expr) {
+    const parseDef = (): void => {
+        let [nameRaw, exprRaw] = currentLine.split("=")
+        if (!nameRaw || !exprRaw) {
             return error(`Invalid definition, expected format "name = expression"`)
         }
-        name = name.toLowerCase()
+        const name = nameRaw.trim().toLowerCase()
+
+        const nameSpan = document.createElement("span")
+        nameSpan.classList.add("ast", "obj")
+        nameSpan.textContent = capitalize(name)
+
+        const equalsSpan = document.createElement("span")
+        equalsSpan.classList.add("ast", "assign")
+        equalsSpan.textContent = "="
+
         if (defs.has(name)) {
             return error(`Duplicate definition for ${name}`)
         }
+        c += nameRaw.length + 1
 
-        defs.set(name, parseExpr(expr))
+        const definition = parseExpr()
+        defs.set(name, definition)
+
+        const defSpan = document.createElement("span")
+        defSpan.classList.add("ast", "def")
+        defSpan.appendChild(nameSpan)
+        defSpan.appendChild(equalsSpan)
+        defSpan.appendChild(definition.builtObjElem)
+        htmlElements.push(defSpan)
+        htmlElements.push(document.createElement("br"))
     }
 
     for (; l < lines.length; l++) {
-        const line = lines[l].trim()
-        if (line.length !== 0 && !line.startsWith("#")) {
+        currentLine = lines[l]
+        c = 0
+        if (currentLine.length !== 0 && !currentLine.startsWith("#")) {
 
 
-            c = 0
-            input = line
-
-            if (line.includes("=")) {
-                parseDef(line)
+            if (currentLine.includes("=")) {
+                parseDef()
             } else {
-                const ast = parseExpr(line)
-                // console.log("Final AST:", ast)
-                return [ast, elemToAstMap]
+                const ast = parseExpr()
+                htmlElements.push(ast.builtObjElem)
+                return [ast, htmlElements, elemToAstMap]
             }
         }
-        prevLinesOffset += line.length + 1
+        prevLinesOffset += currentLine.length + 1
     }
 
-    return error(`No expression found in input`)
+    // no expression; generate empty elem
+    const emptySpan = document.createElement("span")
+    htmlElements.push(emptySpan)
+    const emptyAst: AST = { _type: "obj", token: dialect.emptyObj, srcElem: emptySpan, builtObjElem: emptySpan, dialect, svgElems: [] }
+
+    return [emptyAst, htmlElements, elemToAstMap]
 }
 
 function fallbackParse(input: string): HTMLElement {
@@ -453,11 +494,12 @@ function fallbackParse(input: string): HTMLElement {
         containerSpan.appendChild(tokenSpan)
     }
     for (let l = 0; l < lines.length; l++) {
-        const line = lines[l].trim()
+        const line = lines[l]
 
         if (line.length === 0) continue
 
         let buf = ""
+        let bufIsSymbol = false
         const flushBuf = () => {
             if (buf.length > 0) {
                 push(buf)
@@ -468,10 +510,12 @@ function fallbackParse(input: string): HTMLElement {
             const char = line[c]
             const isLower = char >= "a" && char <= "z"
             const isWhitespace = char === " " || char === "\t"
-            if (buf.length === 3 || !(isLower || isWhitespace)) {
+            const isSymbol = char === "="
+            if (buf.length === 3 || !(isLower || isWhitespace) || isSymbol || bufIsSymbol) {
                 flushBuf()
             }
             buf += char
+            bufIsSymbol = isSymbol
         }
 
         flushBuf()
@@ -493,29 +537,29 @@ function pretty(ast: AST, parensIfComplex?: boolean): string {
     switch (ast._type) {
         case 'obj':
         case 'call':
-            return `<span style="">${capitalize(ast.token.str)}</span>`
+            return `<span style="">${capitalize(ast.token)}</span>`
         case 'pose': {
-            const invertArgs = ast.dialect.PoseDict[ast.token.str].invertArgs
+            const invertArgs = ast.dialect.PoseDict[ast.token].invertArgs
             const [first, second] = invertArgs ? [ast.second, ast.first] : [ast.first, ast.second]
-            const repr = `${pretty(first, true)} ${pretty(second, true)} <span style="font-weight: bold;">${capitalize(ast.token.str)}</span>`
+            const repr = `${pretty(first, true)} ${pretty(second, true)} <span style="font-weight: bold;">${capitalize(ast.token)}</span>`
             if (parensIfComplex) return `(${repr})`
             return repr
         }
         case 'rot': {
-            let angleNum = parseInt(ast.token.str)
+            let angleNum = parseInt(ast.token)
             let child = ast.arg
             while (child._type === 'rot') {
-                angleNum = (angleNum + parseInt(child.token.str)) % 12
+                angleNum = (angleNum + parseInt(child.token)) % 12
                 child = child.arg
             }
-            if (ast.token.str === "0") return pretty(child)
+            if (ast.token === "0") return pretty(child)
             return `${pretty(child, true)}${angleNum}`
         }
         case 'size':
-            return `${pretty(ast.arg, true)}<span style="font-weight: bold;">${ast.token.str}</span>`
+            return `${pretty(ast.arg, true)}<span style="font-weight: bold;">${ast.token}</span>`
         case 'col': {
-            const cssColor = ast.dialect.ColorDict[ast.token.str]
-            return `${pretty(ast.arg, true)}<span style="font-style: italic; padding: 0 0.2ex 0 0.1ex; margin-left: 0.1ex; border: 3px solid ${cssColor}">${capitalize(ast.token.str)}</span>`
+            const cssColor = ast.dialect.ColorDict[ast.token]
+            return `${pretty(ast.arg, true)}<span style="font-style: italic; padding: 0 0.2ex 0 0.1ex; margin-left: 0.1ex; border: 3px solid ${cssColor}">${capitalize(ast.token)}</span>`
         }
     }
 }
@@ -528,9 +572,9 @@ function sizeOf(ast: AST): SizeAndCenter {
                 case 'call':
                     return sizeOf(ast.def)
                 case 'obj':
-                    return ast.dialect.ObjsDict[ast.token.str]
+                    return ast.dialect.ObjsDict[ast.token]
                 case 'pose': {
-                    const poseCode = ast.dialect.PoseDict[ast.token.str].poseCode
+                    const poseCode = ast.dialect.PoseDict[ast.token].poseCode
                     const firstSize = sizeOf(ast.first)
                     const secondSize = sizeOf(ast.second)
                     const newWidthDefault = Math.max(firstSize.relativeCenter.x, secondSize.relativeCenter.x) + Math.max(firstSize.w - firstSize.relativeCenter.x, secondSize.w - secondSize.relativeCenter.x)
@@ -580,7 +624,7 @@ function sizeOf(ast: AST): SizeAndCenter {
                     }
                 }
                 case 'rot': {
-                    const angle = ast.token.str
+                    const angle = ast.token
                     const childSize = sizeOf(ast.arg)
                     if (angle === "0") return childSize
                     const relativeCenter = (() => {
@@ -612,7 +656,7 @@ function sizeOf(ast: AST): SizeAndCenter {
                     }
                 }
                 case 'size': {
-                    const size = ast.token.str
+                    const size = ast.token
                     const childSize = sizeOf(ast.arg)
                     const factor = ast.dialect.SizeDict[size]
                     return {
@@ -721,7 +765,7 @@ function astToSVG(ast: AST): SVGSVGElement {
                 case 'call':
                     return render(ast.def)
                 case 'obj': {
-                    const obj = ast.token.str
+                    const obj = ast.token
                     const def = ast.dialect.ObjsDict[obj]
                     const objSvg = def.makeSvg()
                     objSvg.setAttribute("transform", `translate(${-def.relativeCenter.x} ${-def.relativeCenter.y})`)
@@ -732,7 +776,7 @@ function astToSVG(ast: AST): SVGSVGElement {
                     return svgGroup([objSvg, makeCenterCircle()])
                 }
                 case 'pose': {
-                    const poseCode = ast.dialect.PoseDict[ast.token.str].poseCode
+                    const poseCode = ast.dialect.PoseDict[ast.token].poseCode
                     const firstSvg = render(ast.first)
                     const secondSvg = render(ast.second)
                     const combinedSize = sizeOf(ast)
@@ -794,16 +838,16 @@ function astToSVG(ast: AST): SVGSVGElement {
                     }
                 }
                 case 'rot': {
-                    const angle = ast.token.str
+                    const angle = ast.token
                     return svgGroup(render(ast.arg), `rotate(${30 * parseInt(angle)})`, `rot${angle}`)
                 }
                 case 'size': {
-                    const size = ast.token.str
+                    const size = ast.token
                     const factor = ast.dialect.SizeDict[size]
                     return svgGroup(render(ast.arg), `scale(${factor})`, `size${size}`)
                 }
                 case 'col': {
-                    const color = ast.token.str
+                    const color = ast.token
                     const cssColor = ast.dialect.ColorDict[color]
                     const groupContent = render(ast.arg)
                     groupContent.querySelectorAll(".obj").forEach(elem => {
@@ -824,9 +868,6 @@ function astToSVG(ast: AST): SVGSVGElement {
     const size = sizeOf(ast)
     const globalDx = size.relativeCenter.x
     const globalDy = size.relativeCenter.y
-    const centerFill = debug ? "red" : "none"
-    const objFillColor = "var(--fillcolor, rgb(255 255 255 / 0.2))"
-    const dropShadow = "drop-shadow(0px 0px 0.2px #0004)"
     const debugFrame = !debug ? makeSvgEmpty()
         : svgGroup([
             makeCenterCircle("orig"),
@@ -848,125 +889,12 @@ function astToSVG(ast: AST): SVGSVGElement {
         style: `background: ${background}; margin: 0 auto;`
     })
 
-    const svgStyle = makeSvgElem("style", {})
-    svgStyle.textContent = `
-    .shadow {
-            -webkit-filter: ${dropShadow};
-            filter: ${dropShadow};
-        }
-        .cp { fill: ${centerFill}; stroke: none; }
-        .cp.orig { fill: blue; }
-        .obj {
-            fill: ${objFillColor};
-            stroke-width: 0;
-            stroke: oklab(from ${objFillColor} calc(l * 0.85) a b / 0.3);
-            vector-effect: non-scaling-stroke;
-        }
-        .obj:not(.hascol) {
-            stroke-width: 2;
-            stroke: black;
-        }
-
-
-@keyframes pulse {
-  0%, 100% {
-    fill: oklch(from ${objFillColor} calc(l * 0.8) c h); /* darker */
-    /* opacity: 0.5; */
-  }
-  50% {
-    fill: oklch(from ${objFillColor} calc(l * 1.2) c h); /* lighter */
-    /* opacity: 1; */
-  }
-}
-
-@keyframes cot {
-    0% {
-        transform: translate(10px, 0px);
-        opacity: 0;
+    if (debug) {
+        svg.querySelectorAll(".cp").forEach(elem => elem.classList.add("debug"))
     }
-    25% {
-        transform: none;
-        opacity: 1;
-    }
-}
 
-@keyframes sou {
-    0% {
-        transform: translate(0px, 10px);
-        opacity: 0;
-    }
-    25% {
-        transform: none;
-        opacity: 1;
-    }
-}
 
-@keyframes emp {
-    0% {
-        stroke-width: 50;
-    }
-    25% {
-        stroke-width: 0;
-    }
-}
-
-span.ast {
-    display: inline-block;
-    margin: 0 0.1ex;
-}
-
-span.ast.pose {
-    font-weight: bold;
-}
-
-span.ast.size {
-    font-weight: bold;
-}
-
-span.ast.col {
-    font-style: italic;
-}
-
-span.ast.highlighted {
-    border-bottom: 2px solid gray;
-}
-
-span.ast.highlighted_built {
-    border: 1px solid gray;
-}
-
-span.ast.highlighted_arg.arg {
-    background-color: rgba(228, 228, 228, 0.9);
-}
-
-span.ast.highlighted_arg.first {
-    background-color: rgba(214, 250, 255, 0.9);
-}
-
-span.ast.highlighted_arg.second {
-    background-color: rgba(253, 224, 255, 0.9);
-}
-
-.highlighted > *.obj {
-  animation: pulse 1s ease-in-out infinite;
-  stroke-width: 0.15;
-}
-
-.pose.right.highlighted > .second {
-    animation: cot 2s ease-in-out infinite;
-}
-
-.pose.bottom.highlighted > .second {
-    animation: sou 2s ease-in-out infinite;
-}
-
-.pose.stack.highlighted > .second *.obj {
-    stroke: ${objFillColor};
-    animation: emp 2s ease-in-out infinite;
-}
-    `
     const svgChildren = [
-        svgStyle,
         svgGroup(render(ast), `translate(${globalDx} ${globalDy})`, "shadow"),
         debugFrame,
     ]
@@ -976,16 +904,6 @@ span.ast.highlighted_arg.second {
     }
 
     return svg
-}
-
-
-function gallery(...shapes: string[]): string {
-    if (shapes.length === 0) return ""
-    let buf = shapes[0]
-    for (let i = 1; i < shapes.length; i++) {
-        buf += `vid-cot${shapes[i]}cot`
-    }
-    return buf
 }
 
 function children(ast: AST): AST[] {
@@ -1036,19 +954,6 @@ function printSizes(ast: AST): void {
         console.log(`${"  ".repeat(depth)}${pretty(node)}   -->   w=${size.w.toFixed(2)}, h=${size.h.toFixed(2)}, center=(${size.relativeCenter.x.toFixed(2)}, ${size.relativeCenter.y.toFixed(2)})`)
     })
 }
-
-function findNodeAt(ast: AST, pos: number): AST | undefined {
-    let found: AST | undefined = undefined
-    visit(ast, (node) => {
-        if (pos >= node.token.range.pos && pos <= node.token.range.pos + node.token.range.len) {
-            found = node
-            return false
-        }
-        return
-    })
-    return found
-}
-
 
 function getSelectionOffsetsWithin(container: HTMLElement): { start: number, end: number } | undefined {
     const selection = document.getSelection()
@@ -1424,55 +1329,20 @@ async function main() {
 
     createSettingsPopup(dialect)
 
-    const codeRow = document.createElement("div")
-    setStyle(codeRow, {
-        display: "flex",
-        alignItems: "center",
-        gap: "8px",
-        paddingInline: "8px",
-    })
-
-    const codeStatusIndicator = document.createElement("span")
-    codeStatusIndicator.title = S("parseStatus")
-    setStyle(codeStatusIndicator, {
-        minWidth: "20px",
-        textAlign: "center",
-        fontSize: "16px",
-        fontWeight: "700",
-        userSelect: "none",
-    })
-
     const setParseStatus = (status: "idle" | "ok" | "error") => {
         switch (status) {
             case "idle":
-                codeStatusIndicator.textContent = ""
-                codeStatusIndicator.style.color = "#666"
-                codeStatusIndicator.title = S("parseStatus")
+                codeContainer.style.removeProperty("background")
                 break
             case "ok":
-                codeStatusIndicator.textContent = "✅"
-                codeStatusIndicator.style.color = "#1d6e2c"
-                codeStatusIndicator.title = S("codeCompiles")
+                codeContainer.style.setProperty("background", "#f0fff0")
                 break
             case "error":
-                codeStatusIndicator.textContent = "❌"
-                codeStatusIndicator.style.color = "#a12828"
-                codeStatusIndicator.title = S("codeHasErrors")
+                codeContainer.style.setProperty("background", "#fff0f0")
                 break
         }
     }
 
-    const codeContainerParent = codeContainer.parentElement
-    if (!codeContainerParent) {
-        throw new Error("Code container parent not found")
-    }
-    codeContainerParent.insertBefore(codeRow, codeContainer)
-    codeRow.appendChild(codeContainer)
-    codeRow.appendChild(codeStatusIndicator)
-    setStyle(codeContainer, {
-        flex: "1 1 auto",
-        minWidth: "0",
-    })
     setParseStatus("idle")
 
     const showToast = makeToastUI()
@@ -1557,7 +1427,7 @@ async function main() {
             }
             e.preventDefault()
             e.stopPropagation()
-            selectTokenInCode(generatingAst.token.elem)
+            selectTokenInCode(generatingAst.srcElem)
         }
     }, { capture: true })
 
@@ -1685,7 +1555,7 @@ async function main() {
 
         clearHighlights()
         const previousSelection = getSelectionOffsetsWithin(codeContainer)
-        let parseResult: [AST, WeakMap<HTMLElement, AST>] | undefined = undefined
+        let parseResult: [AST, HTMLElement[], WeakMap<HTMLElement, AST>] | undefined = undefined
 
         if (code.trim() === "") {
             codeContainer.innerHTML = ""
@@ -1706,7 +1576,7 @@ async function main() {
                 }
             }
             if (parseResult) {
-                const [ast, newElemToAstMap] = parseResult
+                const [ast, htmlElements, newElemToAstMap] = parseResult
                 currentAst = ast
                 elemToAstMap = newElemToAstMap
                 setParseStatus("ok")
@@ -1717,8 +1587,9 @@ async function main() {
                 svgContainer.appendChild(svg)
 
                 codeContainer.innerHTML = ""
-                console.log("AST for final code:", ast, ast.builtObjElem)
-                codeContainer.appendChild(ast.builtObjElem)
+                for (const elem of htmlElements) {
+                    codeContainer.appendChild(elem)
+                }
             } else {
                 currentAst = undefined
                 elemToAstMap = new WeakMap()
@@ -1768,7 +1639,6 @@ async function main() {
     if (isFullScreen) {
         cheatSheetContainer.style.display = "none"
         prettyprintContainer.style.display = "none"
-        codeRow.style.display = "none"
     }
 
     const loadFromURL = (): boolean => {
