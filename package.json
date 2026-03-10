@@ -16,9 +16,10 @@
   "watch": {
     "bundle": {
       "patterns": [
-        "web"
+        "web",
+        "img"
       ],
-      "extensions": "ts"
+      "extensions": "ts,svg"
     },
     "testfiles": {
       "patterns": [

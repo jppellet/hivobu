@@ -1,8 +1,20 @@
 import * as LZString from "lz-string"
 
+// 'ts-ignore' works on the next line, so this does it for the first line
+// @ts-ignore
+
+import imgGab from '../img/gab.svg'; // @ts-ignore
+import imgGlo from '../img/glo.svg'; // @ts-ignore
+import imgJpp from '../img/jpp.svg'; // @ts-ignore
+import imgMel from '../img/mel.svg'; // @ts-ignore
+
+void 0 // dummy line to consume the last 'ts-ignore'
+
+
+
 type Point = { x: number, y: number }
 type SizeAndCenter = { w: number, h: number, relativeCenter: Point }
-type ObjDef = SizeAndCenter & { makeSvg: (this: SizeAndCenter) => SVGElement }
+type ObjDef = SizeAndCenter & { makeSvg: (this: SizeAndCenter) => SVGElement, hidden?: boolean }
 
 const Strings_en = {
     shapes: "Shapes",
@@ -10,6 +22,12 @@ const Strings_en = {
     colors: "Colors",
     sizes: "Sizes",
     rotation: "Rotation",
+    parseStatus: "Parse status",
+    codeCompiles: "Code valid",
+    codeHasErrors: "Code has errors",
+    settings: "Settings",
+    lang: "Language",
+    dialect: "Dialect",
 }
 
 const Strings_fr = {
@@ -18,6 +36,12 @@ const Strings_fr = {
     colors: "Couleurs",
     sizes: "Taille",
     rotation: "Rotation",
+    parseStatus: "Statut de l’analyse",
+    codeCompiles: "Le code est valide",
+    codeHasErrors: "Le code est erronné",
+    settings: "Réglages",
+    lang: "Langue",
+    dialect: "Dialecte",
 } satisfies typeof Strings_en
 
 const Transations = {
@@ -28,7 +52,18 @@ const Transations = {
 type Lang = keyof typeof Transations
 type TranslatedString = keyof typeof Strings_en
 
-const DefaultLang: Lang = "fr"
+const getBrowserLang = (): Lang => {
+    const browserLang = navigator.language.toLowerCase().split('-')[0]
+    return browserLang in Transations ? browserLang as Lang : "en"
+}
+
+const DefaultLang: Lang = getBrowserLang()
+let currentLang: Lang = DefaultLang
+
+function S(key: TranslatedString) {
+    return Transations[currentLang][key]
+}
+
 
 const PoseCodes = [
     "stack",
@@ -46,7 +81,6 @@ class Dialect {
     constructor(
         public readonly name: string,
         public readonly ObjsDict: Record<string, SizeAndCenter & ObjDef>,
-        public readonly EmptyObj: string,
         public readonly precolored: boolean,
         public readonly mkPreviewString: (obj: string) => string,
         public readonly PoseDict: Record<string, { poseCode: PoseCode, primary?: boolean, invertArgs?: boolean }>,
@@ -149,10 +183,38 @@ const DialectDefault = new Dialect(
             w: 10, h: 10, relativeCenter: { x: 5, y: 5 },
             makeSvg() {
                 return makeSvgEmpty()
-            }
+            },
+            hidden: true,
         },
+        "glo": {
+            w: 10, h: 10, relativeCenter: { x: 5, y: 5 },
+            makeSvg() {
+                return makeSvgWith(imgGlo, this.w, this.h)
+            },
+            hidden: true,
+        },
+        "mel": {
+            w: 10, h: 10, relativeCenter: { x: 5, y: 5 },
+            makeSvg() {
+                return makeSvgWith(imgMel, this.w, this.h)
+            },
+            hidden: true,
+        },
+        "gab": {
+            w: 10, h: 10, relativeCenter: { x: 5, y: 5 },
+            makeSvg() {
+                return makeSvgWith(imgGab, this.w, this.h)
+            },
+            hidden: true,
+        },
+        "jpp": {
+            w: 10, h: 10, relativeCenter: { x: 5, y: 5 },
+            makeSvg() {
+                return makeSvgWith(imgJpp, this.w, this.h)
+            },
+            hidden: true,
+        }
     },
-    "vid",
     false,
     code => code + "noi",
     {
@@ -217,10 +279,10 @@ const DialectHivobu = new Dialect(
             w: 10, h: 10, relativeCenter: { x: 5, y: 5 },
             makeSvg() {
                 return makeSvgEmpty()
-            }
+            },
+            hidden: true,
         },
     },
-    "vid",
     true,
     code => code,
     {
@@ -652,6 +714,28 @@ function makeSvgPolygon(pointsArr: Point[], attrs: Record<string, string | numbe
 
 function makeSvgEmpty() {
     return makeSvgElem("g", {})
+}
+
+function makeSvgWith(svgCode: string, w: number, h: number): SVGElement {
+
+    const href = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgCode)}`
+    const image = makeSvgElem("image", {
+        href,
+        width: w,
+        height: h,
+        preserveAspectRatio: "xMidYMid meet",
+    })
+
+    // const container = document.createElement("div")
+    // container.innerHTML = svgCode
+    // const svg = container.querySelector("svg")!
+    // const viewBox = svg.getAttribute("viewBox")
+    // const { width, height } = svg.viewBox.baseVal
+    // console.log({ viewBox, width, height })
+    // const factor = Math.min(w / width, h / height)
+    // const mainGroup = svgGroup(svg)
+    // mainGroup.setAttribute("transform", `scale(${factor})`)
+    return image
 }
 
 function svgGroup(children: SVGElement | SVGElement[], transform?: string, className?: string): SVGGElement {
@@ -1211,32 +1295,133 @@ async function copySvgToClipboardAsImage(svg: SVGSVGElement): Promise<void> {
     }
 }
 
+function createSettingsPopup(currentDialect: Dialect): void {
 
+    const settingPopup = document.createElement("details")
+    const settingPopupSummary = document.createElement("summary")
+    settingPopupSummary.textContent = S("settings")
+    settingPopup.appendChild(settingPopupSummary)
+    setStyle(settingPopup, {
+        position: "fixed",
+        right: "16px",
+        bottom: "16px",
+        zIndex: "10000",
+        background: "#fff",
+        border: "1px solid #b7b7b7",
+        borderRadius: "8px",
+        boxShadow: "0 8px 24px rgb(0 0 0 / 0.16)",
+        padding: "6px 8px",
+        font: "500 12px/1.2 ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif",
+    })
+    setStyle(settingPopupSummary, {
+        cursor: "pointer",
+        listStyle: "none",
+        userSelect: "none",
+    })
 
-async function main() {
+    const settingPanel = document.createElement("div")
+    setStyle(settingPanel, {
+        marginTop: "8px",
+        display: "grid",
+        gap: "6px",
+    })
 
-    const codeContainer = document.getElementById("code-container")
-    const cheatSheetContainer = document.getElementById("cheatsheet-container")
-    const svgContainer = document.getElementById("svg-container")
-    const prettyprintContainer = document.getElementById("prettyprint-container")
-
-    const initialUrlParams = new URLSearchParams(window.location.search)
-    const dialectNameParam = initialUrlParams.get("dialect")
-    const langParam = initialUrlParams.get("lang")
-    const lang: Lang = langParam !== null && langParam in Transations ? langParam as Lang : DefaultLang
-    const dialect = dialectNameParam !== null && dialectNameParam in AllDialects ? AllDialects[dialectNameParam] : DialectDefault
-
-    const S = (key: TranslatedString) => Transations[lang][key]
-
-    if (!codeContainer || !cheatSheetContainer || !svgContainer || !prettyprintContainer) {
-        throw new Error("HTML containers not found")
+    const makeSettingRow = (labelText: string, control: HTMLElement): HTMLElement => {
+        const row = document.createElement("label")
+        const text = document.createElement("span")
+        text.textContent = `${labelText}: `
+        setStyle(row, {
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            whiteSpace: "nowrap",
+        })
+        row.appendChild(text)
+        row.appendChild(control)
+        return row
     }
 
+    const langSelect = document.createElement("select")
+    for (const langCode of Object.keys(Transations) as Lang[]) {
+        const option = document.createElement("option")
+        option.value = langCode
+        option.textContent = langCode.toUpperCase()
+        option.selected = langCode === currentLang
+        langSelect.appendChild(option)
+    }
+
+    const dialectSelect = document.createElement("select")
+    for (const dialectName of Object.keys(AllDialects)) {
+        const option = document.createElement("option")
+        option.value = dialectName
+        option.textContent = dialectName
+        option.selected = dialectName === currentDialect.name
+        dialectSelect.appendChild(option)
+    }
+
+    settingPanel.appendChild(makeSettingRow(S("lang"), langSelect))
+    settingPanel.appendChild(makeSettingRow(S("dialect"), dialectSelect))
+    settingPopup.appendChild(settingPanel)
+    document.body.appendChild(settingPopup)
+
+    const reloadWithSettings = (settings: { lang?: string, dialect?: string }): void => {
+        const url = new URL(window.location.href)
+        if (settings.lang) {
+            url.searchParams.set("lang", settings.lang)
+        }
+        if (settings.dialect) {
+            url.searchParams.set("dialect", settings.dialect)
+        }
+        window.location.assign(url.toString())
+    }
+
+    langSelect.addEventListener("change", () => {
+        reloadWithSettings({ lang: langSelect.value })
+    })
+    dialectSelect.addEventListener("change", () => {
+        reloadWithSettings({ dialect: dialectSelect.value })
+    })
+}
+
+function makeCheatSheetContent(dialect: Dialect): string {
+    const smallSvgRender = (code: string): Element => {
+        const ast = parse(code, dialect)[0]
+        const svg = astToSVG(ast)
+        svg.classList.add("objpreview")
+        return svg
+    }
+
+    const unbreakableSpan = (content: string) => `<span style="white-space: nowrap;">${content}</span>`
+    const sep = `<span style="font-size:120%; padding: 0 1ex;"> </span>`
+    const colSpan = (colcode: string) => `<span style="padding: 1px; border: 3px solid ${dialect.ColorDict[colcode]}">${capitalize(colcode)}</span>`
+    const objSpan = (objcode: string) => `<span>${capitalize(objcode)}${smallSvgRender(dialect.mkPreviewString(objcode)).outerHTML}</span>`
+    const objs = Object.keys(dialect.ObjsDict).filter(obj => dialect.ObjsDict[obj].hidden !== true)
+
+    const mkSection = (title: string, items: readonly string[], sectionSep: string, map: (item: string) => string = (item) => item): string => {
+        if (items.length === 0) {
+            return ""
+        }
+        return `<b>${title}:</b> ${items.map(map).join(sectionSep)}`
+    }
+
+    const cheatSheetSections = [[
+        mkSection(S("shapes"), objs, " ", objSpan),
+        mkSection(S("operators"), Object.entries(dialect.PoseDict).filter(([_, v]) => v.primary === true).map(([k]) => k), " ", capitalize),
+    ], [
+        mkSection(S("colors"), dialect.Colors, " ", colSpan),
+        mkSection(S("sizes"), dialect.Sizes, " "),
+        mkSection(S("rotation"), dialect.Angles, " "),
+    ]]
+
+    return cheatSheetSections.map(subsection => subsection.map(unbreakableSpan).join(sep)).join("<br>")
+}
+
+function makeToastUI() {
     const toast = document.createElement("div")
     setStyle(toast, {
         position: "fixed",
         right: "16px",
-        bottom: "16px",
+        bottom: "76px",
         padding: "8px 12px",
         borderRadius: "8px",
         font: "600 12px/1.2 ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif",
@@ -1265,6 +1450,81 @@ async function main() {
             toast.style.transform = "translateY(8px)"
         }, 1400)
     }
+    return showToast
+}
+
+
+async function main() {
+
+    const codeContainer = document.getElementById("code-container")
+    const cheatSheetContainer = document.getElementById("cheatsheet-container")
+    const svgContainer = document.getElementById("svg-container")
+    const prettyprintContainer = document.getElementById("prettyprint-container")
+
+    const initialUrlParams = new URLSearchParams(window.location.search)
+    const dialectNameParam = initialUrlParams.get("dialect")
+    const langParam = initialUrlParams.get("lang")
+    currentLang = langParam !== null && langParam in Transations ? langParam as Lang : DefaultLang
+    const dialect = dialectNameParam !== null && dialectNameParam in AllDialects ? AllDialects[dialectNameParam] : DialectDefault
+
+    if (!codeContainer || !cheatSheetContainer || !svgContainer || !prettyprintContainer) {
+        throw new Error("HTML containers not found")
+    }
+
+    createSettingsPopup(dialect)
+
+    const codeRow = document.createElement("div")
+    setStyle(codeRow, {
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+        paddingInline: "8px",
+    })
+
+    const codeStatusIndicator = document.createElement("span")
+    codeStatusIndicator.title = S("parseStatus")
+    setStyle(codeStatusIndicator, {
+        minWidth: "20px",
+        textAlign: "center",
+        fontSize: "16px",
+        fontWeight: "700",
+        userSelect: "none",
+    })
+
+    const setParseStatus = (status: "idle" | "ok" | "error") => {
+        switch (status) {
+            case "idle":
+                codeStatusIndicator.textContent = ""
+                codeStatusIndicator.style.color = "#666"
+                codeStatusIndicator.title = S("parseStatus")
+                break
+            case "ok":
+                codeStatusIndicator.textContent = "✅"
+                codeStatusIndicator.style.color = "#1d6e2c"
+                codeStatusIndicator.title = S("codeCompiles")
+                break
+            case "error":
+                codeStatusIndicator.textContent = "❌"
+                codeStatusIndicator.style.color = "#a12828"
+                codeStatusIndicator.title = S("codeHasErrors")
+                break
+        }
+    }
+
+    const codeContainerParent = codeContainer.parentElement
+    if (!codeContainerParent) {
+        throw new Error("Code container parent not found")
+    }
+    codeContainerParent.insertBefore(codeRow, codeContainer)
+    codeRow.appendChild(codeContainer)
+    codeRow.appendChild(codeStatusIndicator)
+    setStyle(codeContainer, {
+        flex: "1 1 auto",
+        minWidth: "0",
+    })
+    setParseStatus("idle")
+
+    const showToast = makeToastUI()
 
     document.addEventListener("keydown", (event) => {
         const isCopyRenderedSvgShortcut = event.metaKey
@@ -1294,36 +1554,7 @@ async function main() {
             })
     })
 
-    const smallSvgRender = (code: string): Element => {
-        const ast = parse(code, dialect)[0]
-        const svg = astToSVG(ast)
-        svg.classList.add("objpreview")
-        return svg
-    }
-
-    const unbreakableSpan = (content: string) => `<span style="white-space: nowrap;">${content}</span>`
-
-    const sep = `<span style="font-size:120%; padding: 0 1ex;"> </span>`
-    const colSpan = (colcode: string) => `<span style="padding: 1px; border: 3px solid ${dialect.ColorDict[colcode]}">${capitalize(colcode)}</span>`
-    const objSpan = (objcode: string) => `<span>${capitalize(objcode)}${smallSvgRender(dialect.mkPreviewString(objcode)).outerHTML}</span>`
-    const objs = Object.keys(dialect.ObjsDict).filter(obj => obj !== dialect.EmptyObj)
-
-    const mkSection = (title: string, items: readonly string[], sep: string, map: (item: string) => string = (item) => item): string => {
-        if (items.length === 0) {
-            return ""
-        }
-        return `<b>${title}:</b> ${items.map(map).join(sep)}`
-    }
-    const cheatSheetSections = [[
-        mkSection(S("shapes"), objs, " ", objSpan),
-        mkSection(S("operators"), Object.entries(dialect.PoseDict).filter(([_, v]) => v.primary === true).map(([k]) => k), " ", capitalize),
-    ], [
-        mkSection(S("colors"), dialect.Colors, " ", colSpan),
-        mkSection(S("sizes"), dialect.Sizes, " "),
-        mkSection(S("rotation"), dialect.Angles, " "),
-    ]]
-
-    cheatSheetContainer.innerHTML = cheatSheetSections.map(subsection => subsection.map(unbreakableSpan).join(sep)).join("<br>")
+    cheatSheetContainer.innerHTML = makeCheatSheetContent(dialect)
 
     let currentAst: AST | undefined = undefined
 
@@ -1511,6 +1742,7 @@ async function main() {
             prettyprintContainer.innerHTML = ""
             currentAst = undefined
             elemToAstMap = new WeakMap()
+            setParseStatus("idle")
         } else {
 
             try {
@@ -1526,6 +1758,7 @@ async function main() {
                 const [ast, newElemToAstMap] = parseResult
                 currentAst = ast
                 elemToAstMap = newElemToAstMap
+                setParseStatus("ok")
                 prettyprintContainer.innerHTML = pretty(ast)
                 // printSizes(ast)
                 const svg = astToSVG(ast)
@@ -1538,6 +1771,7 @@ async function main() {
             } else {
                 currentAst = undefined
                 elemToAstMap = new WeakMap()
+                setParseStatus("error")
                 codeContainer.innerHTML = ""
                 codeContainer.appendChild(fallbackParse(code))
             }
@@ -1579,15 +1813,15 @@ async function main() {
         }
     })
 
-    const isFullScreen = new URL(window.location.href).searchParams.get('fs') === '1'
+    const isFullScreen = initialUrlParams.get('fs') === '1'
     if (isFullScreen) {
         cheatSheetContainer.style.display = "none"
         prettyprintContainer.style.display = "none"
-        codeContainer.style.display = "none"
+        codeRow.style.display = "none"
     }
 
     const loadFromURL = (): boolean => {
-        const compressed = new URL(window.location.href).searchParams.get('t')
+        const compressed = initialUrlParams.get('t')
         if (compressed === null) return false
         const decompressed = LZString.decompressFromEncodedURIComponent(compressed)
         if (decompressed === null) return false
