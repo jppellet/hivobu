@@ -1,5 +1,7 @@
 import * as LZString from "lz-string"
 
+import { getCurrentLang, Lang, S, Transations, trySetCurrentLang } from "./strings"
+
 // 'ts-ignore' works on the next line, so this does it for the first line
 // @ts-ignore
 
@@ -11,59 +13,9 @@ import imgMel from '../img/mel.svg'; // @ts-ignore
 void 0 // dummy line to consume the last 'ts-ignore'
 
 
-
 type Point = { x: number, y: number }
 type SizeAndCenter = { w: number, h: number, relativeCenter: Point }
 type ObjDef = SizeAndCenter & { makeSvg: (this: SizeAndCenter) => SVGElement, hidden?: boolean }
-
-const Strings_en = {
-    shapes: "Shapes",
-    operators: "Operators",
-    colors: "Colors",
-    sizes: "Sizes",
-    rotation: "Rotation",
-    parseStatus: "Parse status",
-    codeCompiles: "Code valid",
-    codeHasErrors: "Code has errors",
-    settings: "Settings",
-    lang: "Language",
-    dialect: "Dialect",
-}
-
-const Strings_fr = {
-    shapes: "Formes",
-    operators: "Poses",
-    colors: "Couleurs",
-    sizes: "Taille",
-    rotation: "Rotation",
-    parseStatus: "Statut de l’analyse",
-    codeCompiles: "Le code est valide",
-    codeHasErrors: "Le code est erronné",
-    settings: "Réglages",
-    lang: "Langue",
-    dialect: "Dialecte",
-} satisfies typeof Strings_en
-
-const Transations = {
-    en: Strings_en,
-    fr: Strings_fr,
-}
-
-type Lang = keyof typeof Transations
-type TranslatedString = keyof typeof Strings_en
-
-const getBrowserLang = (): Lang => {
-    const browserLang = navigator.language.toLowerCase().split('-')[0]
-    return browserLang in Transations ? browserLang as Lang : "en"
-}
-
-const DefaultLang: Lang = getBrowserLang()
-let currentLang: Lang = DefaultLang
-
-function S(key: TranslatedString) {
-    return Transations[currentLang][key]
-}
-
 
 const PoseCodes = [
     "stack",
@@ -84,9 +36,9 @@ class Dialect {
         public readonly precolored: boolean,
         public readonly mkPreviewString: (obj: string) => string,
         public readonly PoseDict: Record<string, { poseCode: PoseCode, primary?: boolean, invertArgs?: boolean }>,
-        public readonly ColorDict: Record<string, string>,
-        public readonly Angles: Angle[],
-        public readonly SizeDict: Record<string, number>,
+        public readonly ColorDict: Record<string, string> = {},
+        public readonly Angles: Angle[] = [],
+        public readonly SizeDict: Record<string, number> = {},
     ) {
         this.Objs = Object.keys(ObjsDict)
         this.Poses = Object.keys(PoseDict)
@@ -101,8 +53,7 @@ class Dialect {
     public readonly Sizes: string[]
 }
 
-
-const DialectDefault = new Dialect(
+export const DialectDefault = new Dialect(
     "default",
     {
         "car": {
@@ -254,7 +205,7 @@ const DialectDefault = new Dialect(
     },
 )
 
-const DialectHivobu = new Dialect(
+export const DialectHivobu = new Dialect(
     "hivobu",
     {
         "rah": {
@@ -289,10 +240,14 @@ const DialectHivobu = new Dialect(
         "co": { poseCode: "stack", primary: true, invertArgs: true },
         "du": { poseCode: "bottom-align-junction", primary: true },
     },
-    {},
-    [],
-    {},
 )
+
+type ASTCommon = {
+    dialect: Dialect,
+    builtObjElem: HTMLElement
+    cachedSize?: SizeAndCenter,
+    svgElems: SVGElement[],
+}
 
 type AST = (
     | { _type: 'obj'; token: ParsedToken }
@@ -301,12 +256,7 @@ type AST = (
     | { _type: 'rot'; token: ParsedToken; arg: AST }
     | { _type: 'size'; token: ParsedToken; arg: AST }
     | { _type: 'call'; token: ParsedToken; def: AST }
-) & {
-    dialect: Dialect,
-    builtObjElem: HTMLElement
-    cachedSize?: SizeAndCenter,
-    svgElems: SVGElement[],
-}
+) & ASTCommon
 
 type ASTType = AST["_type"]
 
@@ -328,7 +278,7 @@ type Arity<T extends ASTType | CSTOnlyType> =
     T extends CSTOnlyType ? 0 :
     never
 
-const NoOps = [" ", " ", "\t", "\n", "(", ")"] as const
+const NoOps = [" ", " ", "(", ")"] as const
 
 class ParseError extends Error {
     constructor(public readonly pos: number, message: string) {
@@ -407,7 +357,8 @@ function parse(input: string, dialect: Dialect): [AST, WeakMap<HTMLElement, AST>
                         return error(`Unsupported arity ${arity} for type ${type}`)
                     }
                 }
-                const ast: AST & { _type: T } = { _type: type, token: parsedToken, ...argsObj, dialect, builtObjElem, svgElems: [] } as any
+                const common: ASTCommon = { dialect, builtObjElem, svgElems: [] }
+                const ast: AST & { _type: T } = { _type: type, token: parsedToken, ...argsObj, ...common } as any
                 stack.push(ast)
                 elemToAstMap.set(elem, ast)
                 return ast
@@ -1346,7 +1297,7 @@ function createSettingsPopup(currentDialect: Dialect): void {
         const option = document.createElement("option")
         option.value = langCode
         option.textContent = langCode.toUpperCase()
-        option.selected = langCode === currentLang
+        option.selected = langCode === getCurrentLang()
         langSelect.appendChild(option)
     }
 
@@ -1464,7 +1415,7 @@ async function main() {
     const initialUrlParams = new URLSearchParams(window.location.search)
     const dialectNameParam = initialUrlParams.get("dialect")
     const langParam = initialUrlParams.get("lang")
-    currentLang = langParam !== null && langParam in Transations ? langParam as Lang : DefaultLang
+    trySetCurrentLang(langParam)
     const dialect = dialectNameParam !== null && dialectNameParam in AllDialects ? AllDialects[dialectNameParam] : DialectDefault
 
     if (!codeContainer || !cheatSheetContainer || !svgContainer || !prettyprintContainer) {
