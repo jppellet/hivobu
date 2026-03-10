@@ -12,15 +12,14 @@ import imgMel from '../img/mel.svg'; // @ts-ignore
 
 void 0 // dummy line to consume the last 'ts-ignore'
 
-
 type Point = { x: number, y: number }
 type SizeAndCenter = { w: number, h: number, relativeCenter: Point }
 type ObjDef = SizeAndCenter & { makeSvg: (this: SizeAndCenter) => SVGElement, hidden?: boolean }
 
 const PoseCodes = [
     "stack",
-    "bottom-align-left", "bottom-align-right", /*"bottom-align-center",*/ "bottom-align-junction",
-    "right-align-top", "right-align-bottom", /*"right-align-center", */ "right-align-junction"
+    "bottom-align-left", "bottom-align-right", "bottom-align-center", "bottom-align-junction",
+    "right-align-top", "right-align-bottom", "right-align-center", "right-align-junction"
 ] as const
 
 type PoseCode = typeof PoseCodes[number]
@@ -141,28 +140,28 @@ export const DialectDefault = new Dialect(
         "glo": {
             w: 10, h: 10, relativeCenter: { x: 5, y: 5 },
             makeSvg() {
-                return makeSvgWith(imgGlo, this.w, this.h)
+                return makeEmbeddedSvgWith(imgGlo, this.w, this.h)
             },
             hidden: true,
         },
         "mel": {
             w: 10, h: 10, relativeCenter: { x: 5, y: 5 },
             makeSvg() {
-                return makeSvgWith(imgMel, this.w, this.h)
+                return makeEmbeddedSvgWith(imgMel, this.w, this.h)
             },
             hidden: true,
         },
         "gab": {
             w: 10, h: 10, relativeCenter: { x: 5, y: 5 },
             makeSvg() {
-                return makeSvgWith(imgGab, this.w, this.h)
+                return makeEmbeddedSvgWith(imgGab, this.w, this.h)
             },
             hidden: true,
         },
         "jpp": {
             w: 10, h: 10, relativeCenter: { x: 5, y: 5 },
             makeSvg() {
-                return makeSvgWith(imgJpp, this.w, this.h)
+                return makeEmbeddedSvgWith(imgJpp, this.w, this.h)
             },
             hidden: true,
         }
@@ -173,17 +172,15 @@ export const DialectDefault = new Dialect(
     {
         "emp": { primary: true, poseCode: "stack" },
 
-        "sou": { primary: true, poseCode: "bottom-align-junction" },
-        // "sou": { primary: true, poseCode: "bottom-align-center" },
+        "sou": { primary: true, poseCode: "bottom-align-center" },
         "sod": { poseCode: "bottom-align-right" },
         "sog": { poseCode: "bottom-align-left" },
-        // "soj": {  poseCode: "bottom-align-junction" },
+        "soj": { poseCode: "bottom-align-junction" },
 
-        "cot": { primary: true, poseCode: "right-align-junction" },
-        // "cot": { primary: true, poseCode: "right-align-center" },
+        "cot": { primary: true, poseCode: "right-align-center" },
         "coh": { poseCode: "right-align-top" },
         "cob": { poseCode: "right-align-bottom" },
-        // "coj": { poseCode: "right-align-junction" },
+        "coj": { poseCode: "right-align-junction" },
     },
     {
         "jau": "yellow",
@@ -610,6 +607,13 @@ function sizeOf(ast: AST): SizeAndCenter {
                                 }
                             }
                         }
+                        case "bottom-align-center": {
+                            const h = firstSize.h + secondSize.h
+                            const w = Math.max(firstSize.w, secondSize.w)
+                            // TODO relativeCenter is wrong, it should still indicate the proper junction for possible other junction-based ops
+                            return { w, h, relativeCenter: { x: w / 2, y: h / 2 } }
+                        }
+
                         case "right-align-top":
                         case "right-align-bottom":
                         case "right-align-junction":
@@ -621,6 +625,12 @@ function sizeOf(ast: AST): SizeAndCenter {
                                     y: Math.max(firstSize.relativeCenter.y, secondSize.relativeCenter.y)
                                 }
                             }
+                        case "right-align-center": {
+                            const h = Math.max(firstSize.h, secondSize.h)
+                            const w = firstSize.w + secondSize.w
+                            // TODO relativeCenter is wrong, it should still indicate the proper junction for possible other junction-based ops
+                            return { w, h, relativeCenter: { x: w / 2, y: h / 2 } }
+                        }
                     }
                 }
                 case 'rot': {
@@ -711,7 +721,7 @@ function makeSvgEmpty() {
     return makeSvgElem("g", {})
 }
 
-function makeSvgWith(svgCode: string, w: number, h: number): SVGElement {
+function makeEmbeddedSvgWith(svgCode: string, w: number, h: number): SVGElement {
 
     const href = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgCode)}`
     const image = makeSvgElem("image", {
@@ -721,15 +731,6 @@ function makeSvgWith(svgCode: string, w: number, h: number): SVGElement {
         preserveAspectRatio: "xMidYMid meet",
     })
 
-    // const container = document.createElement("div")
-    // container.innerHTML = svgCode
-    // const svg = container.querySelector("svg")!
-    // const viewBox = svg.getAttribute("viewBox")
-    // const { width, height } = svg.viewBox.baseVal
-    // console.log({ viewBox, width, height })
-    // const factor = Math.min(w / width, h / height)
-    // const mainGroup = svgGroup(svg)
-    // mainGroup.setAttribute("transform", `scale(${factor})`)
     return image
 }
 
@@ -745,7 +746,7 @@ function svgGroup(children: SVGElement | SVGElement[], transform?: string, class
     return group
 }
 
-function astToSVG(ast: AST): SVGSVGElement {
+function astToSVG(ast: AST, id?: string): SVGSVGElement {
     const makeCenterCircle = (className?: string) =>
         // `<circle class="cp ${className ?? ""}" cx="0" cy="0" r="0.3" />`
         makeSvgElem("circle", {
@@ -791,11 +792,16 @@ function astToSVG(ast: AST): SVGSVGElement {
 
                         case 'bottom-align-left':
                         case 'bottom-align-right':
-                        case 'bottom-align-junction': {
+                        case 'bottom-align-junction':
+                        case 'bottom-align-center': {
+                            // TODO *-align-center
                             const combinedDy = firstSize.relativeCenter.y - combinedSize.relativeCenter.y
                             const [secondDx, combinedDx] = (() => {
                                 switch (poseCode) {
-                                    case 'bottom-align-junction': return [0, 0]
+                                    // TODO *-align-center
+                                    case 'bottom-align-junction':
+                                    case 'bottom-align-center':
+                                        return [0, 0]
                                     case 'bottom-align-left': return [- firstSize.relativeCenter.x + secondSize.relativeCenter.x, firstSize.relativeCenter.x - combinedSize.relativeCenter.x]
                                     case 'bottom-align-right': {
                                         const combinedDx = firstSize.relativeCenter.x <= secondSize.relativeCenter.x ? 0 : firstSize.relativeCenter.x - combinedSize.relativeCenter.x
@@ -815,11 +821,16 @@ function astToSVG(ast: AST): SVGSVGElement {
 
                         case 'right-align-top':
                         case 'right-align-bottom':
-                        case 'right-align-junction': {
+                        case 'right-align-junction':
+                        case 'right-align-center': {
+                            // TODO *-align-center
                             const combinedDx = firstSize.relativeCenter.x - combinedSize.relativeCenter.x
                             const [secondDy, combinedDy] = (() => {
                                 switch (poseCode) {
-                                    case 'right-align-junction': return [0, 0]
+                                    // TODO *-align-center
+                                    case 'right-align-junction':
+                                    case 'right-align-center':
+                                        return [0, 0]
                                     case 'right-align-top': return [- firstSize.relativeCenter.y + secondSize.relativeCenter.y, firstSize.relativeCenter.y - combinedSize.relativeCenter.y]
                                     case 'right-align-bottom': {
                                         const combinedDy = firstSize.relativeCenter.y > secondSize.relativeCenter.y ? 0 : -firstSize.relativeCenter.y + combinedSize.relativeCenter.y
@@ -884,6 +895,7 @@ function astToSVG(ast: AST): SVGSVGElement {
 
     const svgPadding = 2
     const svg = makeSvgElem("svg", {
+        id,
         xmlns: "http://www.w3.org/2000/svg",
         viewBox: `-${svgPadding} -${svgPadding} ${size.w + 2 * svgPadding} ${size.h + 2 * svgPadding}`,
         style: `background: ${background}; margin: 0 auto;`
@@ -1094,8 +1106,14 @@ function triggerPngDownload(pngBlob: Blob, fileName = "screenshot.png"): void {
     URL.revokeObjectURL(url)
 }
 
-async function copySvgToClipboardAsImage(svg: SVGSVGElement): Promise<void> {
+async function copySvgToClipboardAsImage(svg: SVGSVGElement, svgStyleElem: Element): Promise<void> {
+    const styleContent = svgStyleElem.textContent ?? ""
+    const styleElem = makeSvgElem("style", {})
+    styleElem.textContent = styleContent
+    svg.insertBefore(styleElem, svg.firstChild)
     const serialized = new XMLSerializer().serializeToString(svg)
+    svg.removeChild(styleElem)
+
     const svgBlob = new Blob([serialized], { type: "image/svg+xml;charset=utf-8" })
     let { width, height } = svgRasterSize(svg)
     width *= 100
@@ -1316,16 +1334,17 @@ async function main() {
     const cheatSheetContainer = document.getElementById("cheatsheet-container")
     const svgContainer = document.getElementById("svg-container")
     const prettyprintContainer = document.getElementById("prettyprint-container")
+    const svgStyleElem = document.querySelector("style#forsvg")
+
+    if (!codeContainer || !cheatSheetContainer || !svgContainer || !prettyprintContainer || !svgStyleElem) {
+        throw new Error("HTML containers not found")
+    }
 
     const initialUrlParams = new URLSearchParams(window.location.search)
     const dialectNameParam = initialUrlParams.get("dialect")
     const langParam = initialUrlParams.get("lang")
     trySetCurrentLang(langParam)
     const dialect = dialectNameParam !== null && dialectNameParam in AllDialects ? AllDialects[dialectNameParam] : DialectDefault
-
-    if (!codeContainer || !cheatSheetContainer || !svgContainer || !prettyprintContainer) {
-        throw new Error("HTML containers not found")
-    }
 
     createSettingsPopup(dialect)
 
@@ -1358,14 +1377,14 @@ async function main() {
             return
         }
 
-        const renderedSvg = svgContainer.querySelector("svg")
+        const renderedSvg = svgContainer.querySelector("svg#main")
         if (!(renderedSvg instanceof SVGSVGElement)) {
             showToast("No SVG to copy", "error")
             return
         }
 
         event.preventDefault()
-        void copySvgToClipboardAsImage(renderedSvg)
+        void copySvgToClipboardAsImage(renderedSvg, svgStyleElem)
             .then(() => {
                 showToast("SVG copied as image")
             })
@@ -1582,7 +1601,7 @@ async function main() {
                 setParseStatus("ok")
                 prettyprintContainer.innerHTML = pretty(ast)
                 // printSizes(ast)
-                const svg = astToSVG(ast)
+                const svg = astToSVG(ast, "main")
                 svgContainer.innerHTML = ""
                 svgContainer.appendChild(svg)
 

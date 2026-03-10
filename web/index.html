@@ -3,25 +3,7 @@
 
 <head>
     <title>Hivobu</title>
-    <style>
-        .objpreview {
-            width: 20px;
-            margin-left: 0.1ex !important;
-            margin-right: 0.7ex !important;
-            transform: translateY(50%);
-            position: relative;
-            top: -0.8ex;
-        }
-
-        #code-container:focus {
-            outline: none;
-        }
-
-        .shadow {
-            -webkit-filter: drop-shadow(0px 0px 0.2px #0004);
-            filter: drop-shadow(0px 0px 0.2px #0004);
-        }
-
+    <style id="forsvg">
         .cp {
             fill: none;
             stroke: none;
@@ -48,6 +30,23 @@
             stroke: black;
         }
 
+        .highlighted>*.obj {
+            animation: pulse 1s ease-in-out infinite;
+            stroke-width: 0.15;
+        }
+
+        .pose.right.highlighted>.second {
+            animation: cot 2s ease-in-out infinite;
+        }
+
+        .pose.bottom.highlighted>.second {
+            animation: sou 2s ease-in-out infinite;
+        }
+
+        .pose.stack.highlighted>.second *.obj {
+            stroke: var(--fillcolor, rgb(255 255 255 / 0.2));
+            animation: emp 2s ease-in-out infinite;
+        }
 
         @keyframes pulse {
 
@@ -98,6 +97,25 @@
                 stroke-width: 0;
             }
         }
+    </style>
+    <style id="forhtml">
+        .objpreview {
+            width: 20px;
+            margin-left: 0.1ex !important;
+            margin-right: 0.7ex !important;
+            transform: translateY(50%);
+            position: relative;
+            top: -0.8ex;
+        }
+
+        #code-container:focus {
+            outline: none;
+        }
+
+        .shadow {
+            -webkit-filter: drop-shadow(0px 0px 0.2px #0004);
+            filter: drop-shadow(0px 0px 0.2px #0004);
+        }
 
         span.ast.def {
             font-size: 90%;
@@ -142,24 +160,6 @@
 
         span.ast.highlighted_arg.second {
             background-color: rgba(253, 224, 255, 0.9);
-        }
-
-        .highlighted>*.obj {
-            animation: pulse 1s ease-in-out infinite;
-            stroke-width: 0.15;
-        }
-
-        .pose.right.highlighted>.second {
-            animation: cot 2s ease-in-out infinite;
-        }
-
-        .pose.bottom.highlighted>.second {
-            animation: sou 2s ease-in-out infinite;
-        }
-
-        .pose.stack.highlighted>.second *.obj {
-            stroke: var(--fillcolor, rgb(255 255 255 / 0.2));
-            animation: emp 2s ease-in-out infinite;
         }
     </style>
 </head>
