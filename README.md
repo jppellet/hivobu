@@ -21,3 +21,12 @@ The URL is updated with the code you have typed in, so you can easily share your
  * [Diamonds](https://jp.pellet.name/hep/hivobu/?t=CoJwlqYGwMoPYFcBKig), [Hearts](https://jp.pellet.name/hep/hivobu/?t=CIUwtqYMIPYC4BUBOBLAbAagMowK5LyA), [Clubs](https://jp.pellet.name/hep/hivobu/?t=EoewdqHgwiAuBlEBXAKgJwJYFonIHIiZA), [Spades](https://jp.pellet.name/hep/hivobu/?t=CoJwlgIgpgttMGED2AXAbIZAIDKSCuowNs8A7JMIA)
  * [Santa](https://jp.pellet.name/hep/hivobu/?t=EoewdgQgNghoyARwCoCcCWoCuBlEHnggFNUB5ANxnJgGEQAXBAORFQFEBbABxwyA)
  * [Flower](https://jp.pellet.name/hep/hivobu/?t=CoJwlqYGwKILYAcBCAbApiA9gOwPIgENBkAiPgQCU0BjSqgZUwFciA1DBxoA)
+
+
+## Project Team
+
+ * Jean-Philippe Pellet
+ * Gabriel Parriaux
+ * Gloria Pittet
+ * Mélissa Cuche
+ * Laurent Walgenwitz
