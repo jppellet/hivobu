@@ -12,6 +12,8 @@ const Strings_en = {
     dialect: "Dialect",
 }
 
+type Strings = typeof Strings_en
+
 const Strings_fr = {
     shapes: "Formes",
     operators: "Poses",
@@ -24,11 +26,41 @@ const Strings_fr = {
     settings: "Réglages",
     lang: "Langue",
     dialect: "Dialecte",
-} satisfies typeof Strings_en
+} satisfies Strings
+
+const Strings_de = {
+    shapes: "Formen",
+    operators: "Operatoren",
+    colors: "Farben",
+    sizes: "Größen",
+    rotation: "Rotation",
+    parseStatus: "Analyse-Status",
+    codeCompiles: "Code ist gültig",
+    codeHasErrors: "Code hat Fehler",
+    settings: "Einstellungen",
+    lang: "Sprache",
+    dialect: "Dialekt",
+} satisfies Strings
+
+const Strings_it = {
+    shapes: "Forme",
+    operators: "Operatori",
+    colors: "Colori",
+    sizes: "Dimensioni",
+    rotation: "Rotazione",
+    parseStatus: "Stato dell'analisi",
+    codeCompiles: "Il codice è valido",
+    codeHasErrors: "Il codice ha errori",
+    settings: "Impostazioni",
+    lang: "Lingua",
+    dialect: "Dialetto",
+} satisfies Strings
 
 export const Transations = {
     en: Strings_en,
     fr: Strings_fr,
+    de: Strings_de,
+    it: Strings_it,
 }
 
 export type Lang = keyof typeof Transations

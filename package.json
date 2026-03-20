@@ -1,10 +1,9 @@
 {
-  "name": "castor-unplugged",
-  "version": "1.0.0",
+  "name": "hivobu",
+  "version": "0.1.0",
   "description": "",
   "license": "ISC",
   "author": "Jean-Philippe Pellet",
-  "main": "index.js",
   "scripts": {
     "compile": "tsc -p tsconfig.json",
     "compile-watch": "tsc -p tsconfig.json --watch",

@@ -31,26 +31,26 @@ const AllDialects: Record<string, Dialect> = {}
 class Dialect {
     constructor(
         public readonly name: string,
-        public readonly ObjsDict: Record<string, SizeAndCenter & ObjDef>,
+        public readonly objectProps: Record<string, SizeAndCenter & ObjDef>,
         public readonly emptyObj: string,
         public readonly precolored: boolean,
         public readonly mkPreviewString: (obj: string) => string,
-        public readonly PoseDict: Record<string, { poseCode: PoseCode, primary?: boolean, invertArgs?: boolean }>,
-        public readonly ColorDict: Record<string, string> = {},
-        public readonly Angles: Angle[] = [],
-        public readonly SizeDict: Record<string, number> = {},
+        public readonly poseProps: Record<string, { poseCode: PoseCode, primary?: boolean, invertArgs?: boolean }>,
+        public readonly colorProps: Record<string, string> = {},
+        public readonly allAngles: Angle[] = [],
+        public readonly sizeProps: Record<string, number> = {},
     ) {
-        this.Objs = Object.keys(ObjsDict)
-        this.Poses = Object.keys(PoseDict)
-        this.Colors = Object.keys(ColorDict)
-        this.Sizes = Object.keys(SizeDict)
+        this.allObjects = Object.keys(objectProps)
+        this.allPoses = Object.keys(poseProps)
+        this.allColors = Object.keys(colorProps)
+        this.allSizes = Object.keys(sizeProps)
         AllDialects[name] = this
     }
 
-    public readonly Objs: string[]
-    public readonly Poses: string[]
-    public readonly Colors: string[]
-    public readonly Sizes: string[]
+    public readonly allObjects: string[]
+    public readonly allPoses: string[]
+    public readonly allColors: string[]
+    public readonly allSizes: string[]
 }
 
 export const DialectDefault = new Dialect(
@@ -195,6 +195,7 @@ export const DialectDefault = new Dialect(
         "noi": "black",
         "mag": "magenta",
         "bei": "beige",
+        "bru": "rgb(128, 79, 0)",
         "vio": "indigo",
     },
     ["0", "3", "6", "9"],
@@ -398,19 +399,19 @@ function parse(userCode: string, dialect: Dialect): [AST, HTMLElement[], WeakMap
                 continue
             }
 
-            if (tryMatchFrom(dialect.Objs, "obj", 0))
+            if (tryMatchFrom(dialect.allObjects, "obj", 0))
                 continue
 
-            if (tryMatchFrom(dialect.Colors, "col", 1))
+            if (tryMatchFrom(dialect.allColors, "col", 1))
                 continue
 
-            if (tryMatchFrom(dialect.Poses, "pose", 2, { argOrderDict: dialect.PoseDict }))
+            if (tryMatchFrom(dialect.allPoses, "pose", 2, { argOrderDict: dialect.poseProps }))
                 continue
 
-            if (tryMatchFrom(dialect.Angles, "rot", 1))
+            if (tryMatchFrom(dialect.allAngles, "rot", 1))
                 continue
 
-            if (tryMatchFrom(dialect.Sizes, "size", 1))
+            if (tryMatchFrom(dialect.allSizes, "size", 1))
                 continue
 
             return error(`Unknown token at position ${c}: ${currentLine.slice(c)}`)
@@ -536,7 +537,7 @@ function pretty(ast: AST, parensIfComplex?: boolean): string {
         case 'call':
             return `<span style="">${capitalize(ast.token)}</span>`
         case 'pose': {
-            const invertArgs = ast.dialect.PoseDict[ast.token].invertArgs
+            const invertArgs = ast.dialect.poseProps[ast.token].invertArgs
             const [first, second] = invertArgs ? [ast.second, ast.first] : [ast.first, ast.second]
             const repr = `${pretty(first, true)} ${pretty(second, true)} <span style="font-weight: bold;">${capitalize(ast.token)}</span>`
             if (parensIfComplex) return `(${repr})`
@@ -555,7 +556,7 @@ function pretty(ast: AST, parensIfComplex?: boolean): string {
         case 'size':
             return `${pretty(ast.arg, true)}<span style="font-weight: bold;">${ast.token}</span>`
         case 'col': {
-            const cssColor = ast.dialect.ColorDict[ast.token]
+            const cssColor = ast.dialect.colorProps[ast.token]
             return `${pretty(ast.arg, true)}<span style="font-style: italic; padding: 0 0.2ex 0 0.1ex; margin-left: 0.1ex; border: 3px solid ${cssColor}">${capitalize(ast.token)}</span>`
         }
     }
@@ -569,9 +570,9 @@ function sizeOf(ast: AST): SizeAndCenter {
                 case 'call':
                     return sizeOf(ast.def)
                 case 'obj':
-                    return ast.dialect.ObjsDict[ast.token]
+                    return ast.dialect.objectProps[ast.token]
                 case 'pose': {
-                    const poseCode = ast.dialect.PoseDict[ast.token].poseCode
+                    const poseCode = ast.dialect.poseProps[ast.token].poseCode
                     const firstSize = sizeOf(ast.first)
                     const secondSize = sizeOf(ast.second)
                     const newWidthDefault = Math.max(firstSize.relativeCenter.x, secondSize.relativeCenter.x) + Math.max(firstSize.w - firstSize.relativeCenter.x, secondSize.w - secondSize.relativeCenter.x)
@@ -668,7 +669,7 @@ function sizeOf(ast: AST): SizeAndCenter {
                 case 'size': {
                     const size = ast.token
                     const childSize = sizeOf(ast.arg)
-                    const factor = ast.dialect.SizeDict[size]
+                    const factor = ast.dialect.sizeProps[size]
                     return {
                         w: childSize.w * factor,
                         h: childSize.h * factor,
@@ -767,7 +768,7 @@ function astToSVG(ast: AST, id?: string): SVGSVGElement {
                     return render(ast.def)
                 case 'obj': {
                     const obj = ast.token
-                    const def = ast.dialect.ObjsDict[obj]
+                    const def = ast.dialect.objectProps[obj]
                     const objSvg = def.makeSvg()
                     objSvg.setAttribute("transform", `translate(${-def.relativeCenter.x} ${-def.relativeCenter.y})`)
                     objSvg.classList.add("obj", obj)
@@ -777,7 +778,7 @@ function astToSVG(ast: AST, id?: string): SVGSVGElement {
                     return svgGroup([objSvg, makeCenterCircle()])
                 }
                 case 'pose': {
-                    const poseCode = ast.dialect.PoseDict[ast.token].poseCode
+                    const poseCode = ast.dialect.poseProps[ast.token].poseCode
                     const firstSvg = render(ast.first)
                     const secondSvg = render(ast.second)
                     const combinedSize = sizeOf(ast)
@@ -854,12 +855,12 @@ function astToSVG(ast: AST, id?: string): SVGSVGElement {
                 }
                 case 'size': {
                     const size = ast.token
-                    const factor = ast.dialect.SizeDict[size]
+                    const factor = ast.dialect.sizeProps[size]
                     return svgGroup(render(ast.arg), `scale(${factor})`, `size${size}`)
                 }
                 case 'col': {
                     const color = ast.token
-                    const cssColor = ast.dialect.ColorDict[color]
+                    const cssColor = ast.dialect.colorProps[color]
                     const groupContent = render(ast.arg)
                     groupContent.querySelectorAll(".obj").forEach(elem => {
                         elem.classList.add("hascol")
@@ -1267,9 +1268,9 @@ function makeCheatSheetContent(dialect: Dialect): string {
 
     const unbreakableSpan = (content: string) => `<span style="white-space: nowrap;">${content}</span>`
     const sep = `<span style="font-size:120%; padding: 0 1ex;"> </span>`
-    const colSpan = (colcode: string) => `<span style="padding: 1px; border: 3px solid ${dialect.ColorDict[colcode]}">${capitalize(colcode)}</span>`
+    const colSpan = (colcode: string) => `<span style="padding: 1px; border: 3px solid ${dialect.colorProps[colcode]}">${capitalize(colcode)}</span>`
     const objSpan = (objcode: string) => `<span>${capitalize(objcode)}${smallSvgRender(dialect.mkPreviewString(objcode)).outerHTML}</span>`
-    const objs = Object.keys(dialect.ObjsDict).filter(obj => dialect.ObjsDict[obj].hidden !== true)
+    const objs = Object.keys(dialect.objectProps).filter(obj => dialect.objectProps[obj].hidden !== true)
 
     const mkSection = (title: string, items: readonly string[], sectionSep: string, map: (item: string) => string = (item) => item): string => {
         if (items.length === 0) {
@@ -1280,11 +1281,11 @@ function makeCheatSheetContent(dialect: Dialect): string {
 
     const cheatSheetSections = [[
         mkSection(S("shapes"), objs, " ", objSpan),
-        mkSection(S("operators"), Object.entries(dialect.PoseDict).filter(([_, v]) => v.primary === true).map(([k]) => k), " ", capitalize),
+        mkSection(S("operators"), Object.entries(dialect.poseProps).filter(([_, v]) => v.primary === true).map(([k]) => k), " ", capitalize),
     ], [
-        mkSection(S("colors"), dialect.Colors, " ", colSpan),
-        mkSection(S("sizes"), dialect.Sizes, " "),
-        mkSection(S("rotation"), dialect.Angles, " "),
+        mkSection(S("colors"), dialect.allColors, " ", colSpan),
+        mkSection(S("sizes"), dialect.allSizes, " "),
+        mkSection(S("rotation"), dialect.allAngles, " "),
     ]]
 
     return cheatSheetSections.map(subsection => subsection.map(unbreakableSpan).join(sep)).join("<br>")
