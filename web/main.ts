@@ -747,7 +747,7 @@ function svgGroup(children: SVGElement | SVGElement[], transform?: string, class
     return group
 }
 
-function astToSVG(ast: AST, id?: string): SVGSVGElement {
+function astToSVG(ast: AST, clientWidth: number, id?: string): SVGSVGElement {
     const makeCenterCircle = (className?: string) =>
         // `<circle class="cp ${className ?? ""}" cx="0" cy="0" r="0.3" />`
         makeSvgElem("circle", {
@@ -899,6 +899,7 @@ function astToSVG(ast: AST, id?: string): SVGSVGElement {
         id,
         xmlns: "http://www.w3.org/2000/svg",
         viewBox: `-${svgPadding} -${svgPadding} ${size.w + 2 * svgPadding} ${size.h + 2 * svgPadding}`,
+        width: clientWidth,
         style: `background: ${background}; margin: 0 auto;`
     })
 
@@ -1261,7 +1262,7 @@ function createSettingsPopup(currentDialect: Dialect): void {
 function makeCheatSheetContent(dialect: Dialect): string {
     const smallSvgRender = (code: string): Element => {
         const ast = parse(code, dialect)[0]
-        const svg = astToSVG(ast)
+        const svg = astToSVG(ast, 20)
         svg.classList.add("objpreview")
         return svg
     }
@@ -1602,7 +1603,7 @@ async function main() {
                 setParseStatus("ok")
                 prettyprintContainer.innerHTML = pretty(ast)
                 // printSizes(ast)
-                const svg = astToSVG(ast, "main")
+                const svg = astToSVG(ast, svgContainer.clientWidth, "main")
                 svgContainer.innerHTML = ""
                 svgContainer.appendChild(svg)
 
@@ -1673,6 +1674,8 @@ async function main() {
     if (!loadFromURL()) {
         renderAndShow(codeContainer.innerText, false)
     }
+
+    codeContainer.focus({ preventScroll: true })
 }
 
 document.addEventListener("DOMContentLoaded", main)
