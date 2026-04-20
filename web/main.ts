@@ -24,20 +24,19 @@ const PoseCodes = [
 
 type PoseCode = typeof PoseCodes[number]
 
-type Angle = "0" | "3" | "6" | "9"
-
 const AllDialects: Record<string, Dialect> = {}
 
 class Dialect {
     constructor(
         public readonly name: string,
+        public readonly aliases: string[],
         public readonly objectProps: Record<string, SizeAndCenter & ObjDef>,
         public readonly emptyObj: string,
         public readonly precolored: boolean,
         public readonly mkPreviewString: (obj: string) => string,
         public readonly poseProps: Record<string, { poseCode: PoseCode, primary?: boolean, invertArgs?: boolean }>,
         public readonly colorProps: Record<string, string> = {},
-        public readonly allAngles: Angle[] = [],
+        public readonly rotation: boolean | Record<string, number> = false,
         public readonly sizeProps: Record<string, number> = {},
     ) {
         this.allObjects = Object.keys(objectProps)
@@ -45,16 +44,35 @@ class Dialect {
         this.allColors = Object.keys(colorProps)
         this.allSizes = Object.keys(sizeProps)
         AllDialects[name] = this
+        for (const alias of aliases) {
+            AllDialects[alias] = this
+        }
     }
 
     public readonly allObjects: string[]
     public readonly allPoses: string[]
     public readonly allColors: string[]
     public readonly allSizes: string[]
+
+    public copyWith(name: string, aliases: string[], props: Partial<Dialect>): Dialect {
+        return new Dialect(
+            name,
+            aliases,
+            props.objectProps ?? this.objectProps,
+            props.emptyObj ?? this.emptyObj,
+            props.precolored ?? this.precolored,
+            props.mkPreviewString ?? this.mkPreviewString,
+            props.poseProps ?? this.poseProps,
+            props.colorProps ?? this.colorProps,
+            props.rotation ?? this.rotation,
+            props.sizeProps ?? this.sizeProps
+        )
+    }
 }
 
 export const DialectDefault = new Dialect(
     "default",
+    [],
     {
         "car": {
             w: 10, h: 10, relativeCenter: { x: 5, y: 5 },
@@ -198,15 +216,27 @@ export const DialectDefault = new Dialect(
         "bru": "rgb(128, 79, 0)",
         "vio": "indigo",
     },
-    ["0", "3", "6", "9"],
+    {
+        "0": 0,
+        "3": 90,
+        "6": 180,
+        "9": 270,
+    },
     {
         "–": 1 / 2,
         "+": 2,
     },
 )
 
+
+export const DialectDefaultHours =
+    DialectDefault.copyWith(
+        "default-angles", [], {
+        rotation: true,
+    })
+
 export const DialectHivobu = new Dialect(
-    "hivobu",
+    "hivobu", [],
     {
         "rah": {
             w: 3, h: 10, relativeCenter: { x: 1.5, y: 5 },
@@ -408,8 +438,15 @@ function parse(userCode: string, dialect: Dialect): [AST, HTMLElement[], WeakMap
             if (tryMatchFrom(dialect.allPoses, "pose", 2, { argOrderDict: dialect.poseProps }))
                 continue
 
-            if (tryMatchFrom(dialect.allAngles, "rot", 1))
-                continue
+            if (dialect.rotation !== false && dialect.rotation !== true) {
+                if (tryMatchFrom(Object.keys(dialect.rotation), "rot", 1))
+                    continue
+            } else if (dialect.rotation === true) {
+                const rotationMatch = currentLine.slice(c).match(/^\d+/)
+                if (rotationMatch && tryMatchFrom([rotationMatch[0]], "rot", 1, { mustMatch: true })) {
+                    continue
+                }
+            }
 
             if (tryMatchFrom(dialect.allSizes, "size", 1))
                 continue
@@ -496,8 +533,15 @@ function fallbackParse(input: string): HTMLElement {
 
         if (line.length === 0) continue
 
+        enum BufferContentType {
+            Str,
+            Num,
+            Sym,
+            Whi,
+        }
+
         let buf = ""
-        let bufIsSymbol = false
+        let bufContentType: BufferContentType | null = null
         const flushBuf = () => {
             if (buf.length > 0) {
                 push(buf)
@@ -509,11 +553,12 @@ function fallbackParse(input: string): HTMLElement {
             const isLower = char >= "a" && char <= "z"
             const isWhitespace = char === " " || char === "\t"
             const isSymbol = char === "="
-            if (buf.length === 3 || !(isLower || isWhitespace) || isSymbol || bufIsSymbol) {
+            const isDigit = char >= "0" && char <= "9"
+            if (buf.length === 3 || !(isLower || isWhitespace) || isSymbol || bufContentType !== BufferContentType.Str) {
                 flushBuf()
             }
             buf += char
-            bufIsSymbol = isSymbol
+            bufContentType = isSymbol ? BufferContentType.Sym : BufferContentType.Str
         }
 
         flushBuf()
@@ -531,6 +576,48 @@ function capitalize(s: string): string {
     return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
+function rotationTokenToDegrees(dialect: Dialect, token: string): number {
+    if (dialect.rotation === true) {
+        const angleNum = Number.parseInt(token, 10)
+        if (!Number.isFinite(angleNum)) {
+            throw new Error(`Invalid rotation token '${token}' for free-angle dialect`)
+        }
+        return angleNum
+    }
+
+    if (dialect.rotation && token in dialect.rotation) {
+        return dialect.rotation[token]
+    }
+    throw new Error(`Unknown rotation token '${token}' for dialect ${dialect.name}`)
+}
+
+function normalizeDegrees(angleDegrees: number): number {
+    return ((angleDegrees % 360) + 360) % 360
+}
+
+function rotationDegreesToToken(dialect: Dialect, angleDegrees: number): string | undefined {
+    if (dialect.rotation === true || dialect.rotation === false) {
+        return undefined
+    }
+    const normalized = normalizeDegrees(angleDegrees)
+    for (const [token, degrees] of Object.entries(dialect.rotation)) {
+        if (normalizeDegrees(degrees) === normalized) {
+            return token
+        }
+    }
+    return undefined
+}
+
+function rotatePoint(point: Point, angleDegrees: number): Point {
+    const angleRadians = angleDegrees * Math.PI / 180
+    const cos = Math.cos(angleRadians)
+    const sin = Math.sin(angleRadians)
+    return {
+        x: point.x * cos - point.y * sin,
+        y: point.x * sin + point.y * cos,
+    }
+}
+
 function pretty(ast: AST, parensIfComplex?: boolean): string {
     switch (ast._type) {
         case 'obj':
@@ -544,14 +631,16 @@ function pretty(ast: AST, parensIfComplex?: boolean): string {
             return repr
         }
         case 'rot': {
-            let angleNum = parseInt(ast.token)
+            let angleNum = rotationTokenToDegrees(ast.dialect, ast.token)
             let child = ast.arg
             while (child._type === 'rot') {
-                angleNum = (angleNum + parseInt(child.token)) % 12
+                angleNum += rotationTokenToDegrees(child.dialect, child.token)
                 child = child.arg
             }
-            if (ast.token === "0") return pretty(child)
-            return `${pretty(child, true)}${angleNum}`
+            angleNum = normalizeDegrees(angleNum)
+            if (rotationTokenToDegrees(ast.dialect, ast.token) === 0) return pretty(child)
+            const angleToken = rotationDegreesToToken(ast.dialect, angleNum)
+            return `${pretty(child, true)}${angleToken ?? angleNum}`
         }
         case 'size':
             return `${pretty(ast.arg, true)}<span style="font-weight: bold;">${ast.token}</span>`
@@ -635,35 +724,28 @@ function sizeOf(ast: AST): SizeAndCenter {
                     }
                 }
                 case 'rot': {
-                    const angle = ast.token
+                    const angle = rotationTokenToDegrees(ast.dialect, ast.token)
                     const childSize = sizeOf(ast.arg)
-                    if (angle === "0") return childSize
-                    const relativeCenter = (() => {
-                        switch (angle) {
-                            case "9":
-                                return {
-                                    x: childSize.relativeCenter.y,
-                                    y: childSize.w - childSize.relativeCenter.x
-                                }
-                            case "6":
-                                return {
-                                    x: childSize.w - childSize.relativeCenter.x,
-                                    y: childSize.h - childSize.relativeCenter.y
-                                }
-                            case "3":
-                                return {
-                                    x: childSize.h - childSize.relativeCenter.y,
-                                    y: childSize.relativeCenter.x
-                                }
-                            default:
-                                return childSize.relativeCenter
-                        }
-                    })()
-                    const [w, h] = angle === "6" ? [childSize.w, childSize.h] : [childSize.h, childSize.w]
+                    if (normalizeDegrees(angle) === 0) return childSize
+                    const corners: Point[] = [
+                        { x: -childSize.relativeCenter.x, y: -childSize.relativeCenter.y },
+                        { x: childSize.w - childSize.relativeCenter.x, y: -childSize.relativeCenter.y },
+                        { x: -childSize.relativeCenter.x, y: childSize.h - childSize.relativeCenter.y },
+                        { x: childSize.w - childSize.relativeCenter.x, y: childSize.h - childSize.relativeCenter.y },
+                    ].map(point => rotatePoint(point, angle))
+                    const xs = corners.map(point => point.x)
+                    const ys = corners.map(point => point.y)
+                    const minX = Math.min(...xs)
+                    const maxX = Math.max(...xs)
+                    const minY = Math.min(...ys)
+                    const maxY = Math.max(...ys)
                     return {
-                        w,
-                        h,
-                        relativeCenter
+                        w: maxX - minX,
+                        h: maxY - minY,
+                        relativeCenter: {
+                            x: -minX,
+                            y: -minY
+                        }
                     }
                 }
                 case 'size': {
@@ -850,8 +932,8 @@ function astToSVG(ast: AST, clientWidth: number, id?: string): SVGSVGElement {
                     }
                 }
                 case 'rot': {
-                    const angle = ast.token
-                    return svgGroup(render(ast.arg), `rotate(${30 * parseInt(angle)})`, `rot${angle}`)
+                    const angle = rotationTokenToDegrees(ast.dialect, ast.token)
+                    return svgGroup(render(ast.arg), `rotate(${angle})`, `rot${ast.token}`)
                 }
                 case 'size': {
                     const size = ast.token
@@ -1171,7 +1253,7 @@ async function copySvgToClipboardAsImage(svg: SVGSVGElement, svgStyleElem: Eleme
     }
 }
 
-function createSettingsPopup(currentDialect: Dialect): void {
+function createSettingsPopup(currentDialect: Dialect, showCheatSheet: boolean): void {
 
     const settingPopup = document.createElement("details")
     const settingPopupSummary = document.createElement("summary")
@@ -1235,18 +1317,28 @@ function createSettingsPopup(currentDialect: Dialect): void {
         dialectSelect.appendChild(option)
     }
 
+    const cheatSheetInput = document.createElement("input")
+    cheatSheetInput.type = "checkbox"
+    cheatSheetInput.checked = showCheatSheet
+
     settingPanel.appendChild(makeSettingRow(S("lang"), langSelect))
     settingPanel.appendChild(makeSettingRow(S("dialect"), dialectSelect))
+    settingPanel.appendChild(makeSettingRow(S("cheatSheet"), cheatSheetInput))
     settingPopup.appendChild(settingPanel)
     document.body.appendChild(settingPopup)
 
-    const reloadWithSettings = (settings: { lang?: string, dialect?: string }): void => {
+    const reloadWithSettings = (settings: { lang?: string, dialect?: string, showCheatSheet?: boolean }): void => {
         const url = new URL(window.location.href)
         if (settings.lang) {
             url.searchParams.set("lang", settings.lang)
         }
         if (settings.dialect) {
             url.searchParams.set("dialect", settings.dialect)
+        }
+        if (settings.showCheatSheet === true) {
+            url.searchParams.set("cheatsheet", "1")
+        } else if (settings.showCheatSheet === false) {
+            url.searchParams.delete("cheatsheet")
         }
         window.location.assign(url.toString())
     }
@@ -1256,6 +1348,9 @@ function createSettingsPopup(currentDialect: Dialect): void {
     })
     dialectSelect.addEventListener("change", () => {
         reloadWithSettings({ dialect: dialectSelect.value })
+    })
+    cheatSheetInput.addEventListener("change", () => {
+        reloadWithSettings({ showCheatSheet: cheatSheetInput.checked })
     })
 }
 
@@ -1286,7 +1381,13 @@ function makeCheatSheetContent(dialect: Dialect): string {
     ], [
         mkSection(S("colors"), dialect.allColors, " ", colSpan),
         mkSection(S("sizes"), dialect.allSizes, " "),
-        mkSection(S("rotation"), dialect.allAngles, " "),
+        mkSection(S("rotation"),
+            dialect.rotation === true
+                ? ["45", "90", "180", "270", "etc."]
+                : dialect.rotation
+                    ? Object.entries(dialect.rotation).map(([token, degrees]) => `${token}`)
+                    : [],
+            " "),
     ]]
 
     return cheatSheetSections.map(subsection => subsection.map(unbreakableSpan).join(sep)).join("<br>")
@@ -1345,10 +1446,11 @@ async function main() {
     const initialUrlParams = new URLSearchParams(window.location.search)
     const dialectNameParam = initialUrlParams.get("dialect")
     const langParam = initialUrlParams.get("lang")
+    const showCheatSheet = initialUrlParams.get('cheatsheet') === '1'
     trySetCurrentLang(langParam)
     const dialect = dialectNameParam !== null && dialectNameParam in AllDialects ? AllDialects[dialectNameParam] : DialectDefault
 
-    createSettingsPopup(dialect)
+    createSettingsPopup(dialect, showCheatSheet)
 
     const setParseStatus = (status: "idle" | "ok" | "error") => {
         switch (status) {
@@ -1656,10 +1758,8 @@ async function main() {
         }
     })
 
-    const isFullScreen = initialUrlParams.get('fs') === '1'
-    if (isFullScreen) {
+    if (!showCheatSheet) {
         cheatSheetContainer.style.display = "none"
-        prettyprintContainer.style.display = "none"
     }
 
     const loadFromURL = (): boolean => {
@@ -1679,4 +1779,3 @@ async function main() {
 }
 
 document.addEventListener("DOMContentLoaded", main)
-

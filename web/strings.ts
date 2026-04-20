@@ -10,6 +10,7 @@ const Strings_en = {
     settings: "Settings",
     lang: "Language",
     dialect: "Dialect",
+    cheatSheet: "Cheat sheet",
 }
 
 type Strings = typeof Strings_en
@@ -26,6 +27,7 @@ const Strings_fr = {
     settings: "Réglages",
     lang: "Langue",
     dialect: "Dialecte",
+    cheatSheet: "Aide-mémoire",
 } satisfies Strings
 
 const Strings_de = {
@@ -40,6 +42,7 @@ const Strings_de = {
     settings: "Einstellungen",
     lang: "Sprache",
     dialect: "Dialekt",
+    cheatSheet: "Spickzettel",
 } satisfies Strings
 
 const Strings_it = {
@@ -54,6 +57,7 @@ const Strings_it = {
     settings: "Impostazioni",
     lang: "Lingua",
     dialect: "Dialetto",
+    cheatSheet: "Promemoria",
 } satisfies Strings
 
 export const Transations = {
