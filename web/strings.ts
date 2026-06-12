@@ -1,6 +1,6 @@
 const Strings_en = {
     shapes: "Shapes",
-    operators: "Operators",
+    placement: "Placement",
     colors: "Colors",
     sizes: "Sizes",
     rotation: "Rotation",
@@ -17,7 +17,7 @@ type Strings = typeof Strings_en
 
 const Strings_fr = {
     shapes: "Formes",
-    operators: "Poses",
+    placement: "Poses",
     colors: "Couleurs",
     sizes: "Taille",
     rotation: "Rotation",
@@ -32,7 +32,7 @@ const Strings_fr = {
 
 const Strings_de = {
     shapes: "Formen",
-    operators: "Operatoren",
+    placement: "Platzierung",
     colors: "Farben",
     sizes: "Größen",
     rotation: "Rotation",
@@ -47,7 +47,7 @@ const Strings_de = {
 
 const Strings_it = {
     shapes: "Forme",
-    operators: "Operatori",
+    placement: "Posizionamento",
     colors: "Colori",
     sizes: "Dimensioni",
     rotation: "Rotazione",

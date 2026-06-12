@@ -162,6 +162,34 @@
         span.ast.highlighted_arg.second {
             background-color: rgba(253, 224, 255, 0.9);
         }
+
+        @keyframes auxThoughtBubbleWiggle {
+
+            0%,
+            100% {
+                transform: translate(0, 0);
+            }
+
+            22% {
+                transform: translate(var(--wiggle-x1), var(--wiggle-y1));
+            }
+
+            47% {
+                transform: translate(var(--wiggle-x2), var(--wiggle-y2));
+            }
+
+            73% {
+                transform: translate(var(--wiggle-x3), var(--wiggle-y3));
+            }
+        }
+
+        .aux-thought-bubble {
+            animation-name: auxThoughtBubbleWiggle;
+            animation-duration: 0.5s;
+            animation-iteration-count: infinite;
+            animation-timing-function: ease-in-out;
+            will-change: transform;
+        }
     </style>
 </head>
 

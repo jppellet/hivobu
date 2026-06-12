@@ -394,7 +394,20 @@ function isAST(obj: boolean | AST | undefined): obj is AST {
     return obj !== undefined && typeof obj === "object" && "_type" in obj
 }
 
-function parse(userCode: string, dialect: Dialect): [AST, HTMLElement[], WeakMap<HTMLElement, AST>] {
+type ParsedExpr = { type: "full", ast: AST } | { type: "partial", asts: AST[] }
+
+type ParseResult = {
+    /**
+     * Either "full" if the entire input was parsed successfully, or "partial"
+     * if some end operators are missing and we still have a list of objects
+     * that have not been put together yet.
+     */
+    asts: ParsedExpr,
+    htmlElements: HTMLElement[],
+    elemToAstMap: WeakMap<HTMLElement, AST>,
+}
+
+function parse(userCode: string, dialect: Dialect): ParseResult {
 
     const htmlElements: HTMLElement[] = []
     const elemToAstMap: WeakMap<HTMLElement, AST> = new WeakMap()
@@ -492,7 +505,7 @@ function parse(userCode: string, dialect: Dialect): [AST, HTMLElement[], WeakMap
         return undefined
     }
 
-    const parseExpr = (): AST => {
+    const parseExpr = (): ParsedExpr => {
         let ast
         while (c < currentLine.length) {
             if (tryMatchFrom(NoOps, "noop", 0))
@@ -528,12 +541,11 @@ function parse(userCode: string, dialect: Dialect): [AST, HTMLElement[], WeakMap
             return error(`Unknown token at position ${c}: ${currentLine.slice(c)}`)
         }
 
-        if (stack.length !== 1) {
-            return error(`Invalid input, stack has ${stack.length} items, expected 1: ${JSON.stringify(stack)}`)
+        switch (stack.length) {
+            case 0: return error(`Invalid input, expected 1 item on stack, got 0`)
+            case 1: return { type: "full", ast: stack[0] }
+            default: return { type: "partial", asts: stack }
         }
-
-        const expr = stack.pop()!
-        return expr
     }
 
     const parseDef = (): void => {
@@ -556,7 +568,11 @@ function parse(userCode: string, dialect: Dialect): [AST, HTMLElement[], WeakMap
         }
         c += nameRaw.length + 1
 
-        const definition = parseExpr()
+        const parsedDefinition = parseExpr()
+        if (parsedDefinition.type === "partial") {
+            return error(`Incomplete definition for ${name}`)
+        }
+        const definition = parsedDefinition.ast
         defs.set(name, definition)
 
         const defSpan = document.createElement("span")
@@ -577,9 +593,12 @@ function parse(userCode: string, dialect: Dialect): [AST, HTMLElement[], WeakMap
             if (currentLine.includes("=")) {
                 parseDef()
             } else {
-                const ast = parseExpr()
-                htmlElements.push(ast.builtObjElem)
-                return [ast, htmlElements, elemToAstMap]
+                const parsedExpr = parseExpr()
+                const asts = parsedExpr.type === "full" ? [parsedExpr.ast] : parsedExpr.asts
+                for (const ast of asts) {
+                    htmlElements.push(ast.builtObjElem)
+                }
+                return { asts: parsedExpr, htmlElements, elemToAstMap }
             }
         }
         prevLinesOffset += currentLine.length + 1
@@ -590,7 +609,7 @@ function parse(userCode: string, dialect: Dialect): [AST, HTMLElement[], WeakMap
     htmlElements.push(emptySpan)
     const emptyAst: AST = { _type: "obj", token: dialect.emptyObj, srcElem: emptySpan, builtObjElem: emptySpan, dialect, svgElems: [] }
 
-    return [emptyAst, htmlElements, elemToAstMap]
+    return { asts: { type: "full", ast: emptyAst }, htmlElements, elemToAstMap }
 }
 
 function fallbackParse(input: string): HTMLElement {
@@ -845,6 +864,7 @@ function sizeOf(ast: AST): SizeAndCenter {
 
 
 const background = "#f0f0f0"
+const darkerBackground = "#dddddd"
 
 function makeSvgElem<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string | number | undefined>): SVGElementTagNameMap[K] {
     const elem = document.createElementNS("http://www.w3.org/2000/svg", tag)
@@ -903,7 +923,7 @@ function svgGroup(children: SVGElement | SVGElement[], transform?: string, class
     return group
 }
 
-function astToSVG(ast: AST, clientWidth: number, id?: string): SVGSVGElement {
+function astToSVG(ast: AST, clientWidth: number, background: string, id?: string): SVGSVGElement {
     const makeCenterCircle = (className?: string) =>
         // `<circle class="cp ${className ?? ""}" cx="0" cy="0" r="0.3" />`
         makeSvgElem("circle", {
@@ -1430,8 +1450,9 @@ function createSettingsPopup(currentDialect: Dialect, showCheatSheet: boolean): 
 
 function makeCheatSheetContent(dialect: Dialect): string {
     const smallSvgRender = (code: string): Element => {
-        const ast = parse(code, dialect)[0]
-        const svg = astToSVG(ast, 20)
+        const asts = parse(code, dialect).asts
+        const ast = asts.type === "full" ? asts.ast : asts.asts[0]
+        const svg = astToSVG(ast, 20, background)
         svg.classList.add("objpreview")
         return svg
     }
@@ -1451,7 +1472,7 @@ function makeCheatSheetContent(dialect: Dialect): string {
 
     const cheatSheetSections = [[
         mkSection(S("shapes"), objs, " ", objSpan),
-        mkSection(S("operators"), Object.entries(dialect.poseProps).filter(([_, v]) => v.primary === true).map(([k]) => k), " ", capitalize),
+        mkSection(S("placement"), Object.entries(dialect.poseProps).filter(([_, v]) => v.primary === true).map(([k]) => k), " ", capitalize),
     ], [
         mkSection(S("colors"), dialect.allColors, " ", colSpan),
         mkSection(S("sizes"), dialect.allSizes, " "),
@@ -1739,6 +1760,7 @@ async function main() {
 
     codeContainer.style.padding = "4px"
     svgContainer.style.background = background
+    svgContainer.style.position = "relative"
     prettyprintContainer.style.background = background
 
     let lastRenderedString = ""
@@ -1751,7 +1773,7 @@ async function main() {
 
         clearHighlights()
         const previousSelection = getSelectionOffsetsWithin(codeContainer)
-        let parseResult: [AST, HTMLElement[], WeakMap<HTMLElement, AST>] | undefined = undefined
+        let parseResult: ParseResult | undefined = undefined
 
         if (code.trim() === "") {
             codeContainer.innerHTML = ""
@@ -1772,13 +1794,14 @@ async function main() {
                 }
             }
             if (parseResult) {
-                const [ast, htmlElements, newElemToAstMap] = parseResult
-                currentAst = ast
+                const { asts, htmlElements, elemToAstMap: newElemToAstMap } = parseResult
+                const mainAst = asts.type === "full" ? asts.ast : asts.asts[0]
+                currentAst = mainAst
                 elemToAstMap = newElemToAstMap
-                setParseStatus("ok")
-                prettyprintContainer.innerHTML = pretty(ast)
+                setParseStatus(asts.type === "full" ? "ok" : "error")
+                prettyprintContainer.innerHTML = pretty(mainAst)
                 // printSizes(ast)
-                const svg = astToSVG(ast, svgContainer.clientWidth, "main")
+                const svg = astToSVG(mainAst, svgContainer.clientWidth, background, "main")
                 svgContainer.innerHTML = ""
                 svgContainer.appendChild(svg)
 
@@ -1786,6 +1809,111 @@ async function main() {
                 for (const elem of htmlElements) {
                     codeContainer.appendChild(elem)
                 }
+
+                // show the other ASTs as "thought bubbles" at the right of the main SVG
+                const auxiliaryAsts = asts.type === "full" ? [] : asts.asts.slice(1)
+                if (auxiliaryAsts.length > 0) {
+                    const mainRect = svg.getBoundingClientRect()
+                    const mainHeight = mainRect.height || svg.viewBox.baseVal.height
+                    const bubbleGap = 12
+                    const bubbleWidth = Math.max(72, Math.min(160, svgContainer.clientWidth * 0.22))
+                    const maxBubbleHeight = auxiliaryAsts.length === 1
+                        ? mainHeight * 0.45
+                        : Math.max(48, (mainHeight - bubbleGap * (auxiliaryAsts.length - 1)) / auxiliaryAsts.length - 16)
+                    const maxMediumThoughtDotSize = maxBubbleHeight / 4
+                    const maxSmallThoughtDotSize = maxMediumThoughtDotSize / 2
+                    const containerRect = svgContainer.getBoundingClientRect()
+                    const auxContainer = document.createElement("div")
+                    Object.assign(auxContainer.style, {
+                        position: "absolute",
+                        top: `${Math.max(0, mainRect.top - containerRect.top + svgContainer.scrollTop)}px`,
+                        right: "0",
+                        boxSizing: "border-box",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: `${bubbleGap}px`,
+                        height: `${mainHeight}px`,
+                        justifyContent: auxiliaryAsts.length === 1 ? "center" : "space-evenly",
+                        padding: `8px ${maxMediumThoughtDotSize + maxSmallThoughtDotSize}px 8px 12px`,
+                        pointerEvents: "none",
+                    })
+
+                    const bubbleBorder = "0.5px solid #333"
+                    const wiggleAmplitude = 20
+                    const wiggleOffset = () => `${(Math.random() * wiggleAmplitude - wiggleAmplitude / 2).toFixed(1)}px`
+                    for (let i = 0; i < auxiliaryAsts.length; i++) {
+                        const bubble = document.createElement("div")
+                        bubble.classList.add("aux-thought-bubble")
+                        Object.assign(bubble.style, {
+                            position: "relative",
+                            boxSizing: "border-box",
+                            width: `${bubbleWidth}px`,
+                            maxHeight: `${maxBubbleHeight}px`,
+                            padding: "10px",
+                            border: bubbleBorder,
+                            borderRadius: "20%",
+                            background: darkerBackground,
+                            boxShadow: "2px 3px 0 rgb(0 0 0 / 0.2)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            animationDuration: `${7 + Math.random() * 4}s`,
+                            animationDelay: `${-Math.random() * 6}s`,
+                        })
+                        for (let k = 1; k <= 3; k++) {
+                            bubble.style.setProperty(`--wiggle-x${k}`, wiggleOffset())
+                            bubble.style.setProperty(`--wiggle-y${k}`, wiggleOffset())
+                        }
+
+                        const auxSvg = astToSVG(auxiliaryAsts[i], bubbleWidth - 16, darkerBackground, `aux-${i}`)
+                        const viewBox = auxSvg.viewBox.baseVal
+                        const actualBubbleHeight = Math.min(
+                            maxBubbleHeight,
+                            (bubbleWidth - 20) * viewBox.height / viewBox.width + 20
+                        )
+                        const mediumThoughtDotSize = actualBubbleHeight / 4
+                        const smallThoughtDotSize = mediumThoughtDotSize / 2
+
+                        const mediumThoughtDot = document.createElement("div")
+                        Object.assign(mediumThoughtDot.style, {
+                            position: "absolute",
+                            right: `${-mediumThoughtDotSize * 0.55}px`,
+                            top: "20%",
+                            width: `${mediumThoughtDotSize}px`,
+                            height: `${mediumThoughtDotSize}px`,
+                            background: darkerBackground,
+                            border: bubbleBorder,
+                            borderRadius: "50%",
+                            boxSizing: "border-box",
+                            transform: "translateY(-50%)",
+                        })
+                        bubble.appendChild(mediumThoughtDot)
+
+                        const smallThoughtDot = document.createElement("div")
+                        Object.assign(smallThoughtDot.style, {
+                            position: "absolute",
+                            right: `${-(mediumThoughtDotSize - smallThoughtDotSize * 0.4)}px`,
+                            top: "18%",
+                            width: `${smallThoughtDotSize}px`,
+                            height: `${smallThoughtDotSize}px`,
+                            background: darkerBackground,
+                            border: bubbleBorder,
+                            borderRadius: "50%",
+                            boxSizing: "border-box",
+                            transform: "translateY(-50%)",
+                        })
+                        bubble.appendChild(smallThoughtDot)
+
+                        auxSvg.style.margin = "0"
+                        auxSvg.style.maxWidth = "100%"
+                        auxSvg.style.maxHeight = `${maxBubbleHeight - 16}px`
+                        bubble.appendChild(auxSvg)
+                        auxContainer.appendChild(bubble)
+                    }
+
+                    svgContainer.appendChild(auxContainer)
+                }
+
             } else {
                 currentAst = undefined
                 elemToAstMap = new WeakMap()
