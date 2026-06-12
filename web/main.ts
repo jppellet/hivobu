@@ -26,11 +26,13 @@ type PoseCode = typeof PoseCodes[number]
 
 const AllDialects: Record<string, Dialect> = {}
 
+type ObjectProp = SizeAndCenter & ObjDef
+
 class Dialect {
     constructor(
         public readonly name: string,
         public readonly aliases: string[],
-        public readonly objectProps: Record<string, SizeAndCenter & ObjDef>,
+        public readonly objectProps: Record<string, ObjectProp>,
         public readonly emptyObj: string,
         public readonly precolored: boolean,
         public readonly mkPreviewString: (obj: string) => string,
@@ -70,91 +72,163 @@ class Dialect {
     }
 }
 
+const SquareProp: ObjectProp = {
+    w: 10, h: 10, relativeCenter: { x: 5, y: 5 },
+    makeSvg() {
+        return makeSvgElem("rect", { width: this.w, height: this.h })
+    }
+}
+
+const RectProp: ObjectProp = {
+    w: 3, h: 10, relativeCenter: { x: 1.5, y: 5 },
+    makeSvg() {
+        return makeSvgElem("rect", { width: this.w, height: this.h })
+    }
+}
+
+const TriangleProp: ObjectProp = {
+    w: 10, h: 8.7, relativeCenter: { x: 5, y: 5.8 },
+    makeSvg() {
+        return makeSvgPolygon([{ x: 0, y: this.h }, { x: this.w, y: this.h }, { x: this.w / 2, y: 0 }])
+    }
+}
+
+const CircleProp: ObjectProp = {
+    w: 10, h: 10, relativeCenter: { x: 5, y: 5 },
+    makeSvg() {
+        return makeSvgElem("ellipse", { cx: this.w / 2, cy: this.h / 2, rx: this.w / 2, ry: this.h / 2, })
+    }
+}
+
+const OvalProp: ObjectProp = {
+    w: 5, h: 10, relativeCenter: { x: 2.5, y: 5 },
+    makeSvg() {
+        return makeSvgElem("ellipse", { cx: this.w / 2, cy: this.h / 2, rx: this.w / 2, ry: this.h / 2, })
+    }
+}
+
+const CrossProp: ObjectProp = {
+    w: 10, h: 10, relativeCenter: { x: 5, y: 5 },
+    makeSvg() {
+        const thickness = 1 / 3.15
+        const x1 = this.w * thickness
+        const x2 = this.w * (1 - thickness)
+        const y1 = this.h * thickness
+        const y2 = this.h * (1 - thickness)
+        return makeSvgPolygon([{ x: x1, y: 0 }, { x: x1, y: y1 }, { x: 0, y: y1 }, { x: 0, y: y2 }, { x: x1, y: y2 }, { x: x1, y: this.h }, { x: x2, y: this.h }, { x: x2, y: y2 }, { x: this.w, y: y2 }, { x: this.w, y: y1 }, { x: x2, y: y1 }, { x: x2, y: 0 }])
+    }
+}
+
+const HalfcircleProp: ObjectProp = {
+    w: 10, h: 5, relativeCenter: { x: 5, y: 2.5 },
+    makeSvg() {
+        return makeSvgElem("path", { d: `M 0 ${this.h} A ${this.w / 2} ${this.h} 0 0 1 ${this.w} ${this.h} L ${this.w} ${this.h} L 0 ${this.h} Z` })
+    }
+}
+
+const SpearheadProp: ObjectProp = {
+    w: 10, h: 10, relativeCenter: { x: 5, y: 5 },
+    makeSvg() {
+        return makeSvgPolygon([
+            { x: this.w / 2, y: 0 },
+            { x: this.w, y: this.h },
+            { x: this.w / 2, y: this.h / 2 },
+            { x: 0, y: this.h }])
+    }
+}
+
+const StarProp: ObjectProp = {
+    w: 10, h: 10, relativeCenter: { x: 5, y: 5 },
+    makeSvg() {
+        const outerR = this.w / 2
+        const innerR = outerR * 0.382
+        const points: Point[] = []
+        for (let i = 0; i < 10; i++) {
+            const angle = -Math.PI / 2 + i * Math.PI / 5
+            const radius = i % 2 === 0 ? outerR : innerR
+            points.push({
+                x: this.relativeCenter.x + radius * Math.cos(angle),
+                y: this.relativeCenter.y + radius * Math.sin(angle),
+            })
+        }
+        return makeSvgPolygon(points)
+    }
+}
+
+const EmptyProp: ObjectProp = {
+    w: 10, h: 10, relativeCenter: { x: 5, y: 5 },
+    makeSvg() {
+        return makeSvgEmpty()
+    },
+    hidden: true,
+}
+
+export const DialectDefaultEn = new Dialect(
+    "default-en",
+    [],
+    {
+        "sqa": SquareProp,
+        "rec": RectProp,
+        "tri": TriangleProp,
+        "cir": CircleProp,
+        "ova": OvalProp,
+        "cro": CrossProp,
+        "haf": HalfcircleProp,
+        "spe": SpearheadProp,
+        "sta": StarProp,
+        "emp": EmptyProp,
+    },
+    "emp",
+    false,
+    code => code + "bla",
+    {
+        "pil": { primary: true, poseCode: "stack" },
+        "bel": { primary: true, poseCode: "bottom-align-center" },
+        "nex": { primary: true, poseCode: "right-align-center" },
+    },
+    {
+        "yel": "yellow",
+        "blu": "blue",
+        "cya": "cyan",
+        "gre": "green",
+        "ora": "orange",
+        "pin": "pink",
+        "gra": "gray",
+        "red": "red",
+        "whi": "white",
+        "bla": "black",
+        "mag": "magenta",
+        "bei": "beige",
+        "bro": "rgb(128, 79, 0)",
+        "vio": "indigo",
+    },
+    {
+        "0": 0,
+        "3": 90,
+        "6": 180,
+        "9": 270,
+    },
+    {
+        "–": 1 / 2,
+        "+": 2,
+    },
+)
+
+
 export const DialectDefault = new Dialect(
     "default",
     [],
     {
-        "car": {
-            w: 10, h: 10, relativeCenter: { x: 5, y: 5 },
-            makeSvg() {
-                return makeSvgElem("rect", { width: this.w, height: this.h })
-            }
-        },
-        "rec": {
-            w: 3, h: 10, relativeCenter: { x: 1.5, y: 5 },
-            makeSvg() {
-                return makeSvgElem("rect", { width: this.w, height: this.h })
-            }
-        },
-        "tri": {
-            w: 10, h: 8.7, relativeCenter: { x: 5, y: 5.8 },
-            makeSvg() {
-                return makeSvgPolygon([{ x: 0, y: this.h }, { x: this.w, y: this.h }, { x: this.w / 2, y: 0 }])
-            }
-        },
-        "ron": {
-            w: 10, h: 10, relativeCenter: { x: 5, y: 5 },
-            makeSvg() {
-                return makeSvgElem("ellipse", { cx: this.w / 2, cy: this.h / 2, rx: this.w / 2, ry: this.h / 2, })
-            }
-        },
-        "ova": {
-            w: 5, h: 10, relativeCenter: { x: 2.5, y: 5 },
-            makeSvg() {
-                return makeSvgElem("ellipse", { cx: this.w / 2, cy: this.h / 2, rx: this.w / 2, ry: this.h / 2, })
-            }
-        },
-        "cro": {
-            w: 10, h: 10, relativeCenter: { x: 5, y: 5 },
-            makeSvg() {
-                const thickness = 1 / 3.15
-                const x1 = this.w * thickness
-                const x2 = this.w * (1 - thickness)
-                const y1 = this.h * thickness
-                const y2 = this.h * (1 - thickness)
-                return makeSvgPolygon([{ x: x1, y: 0 }, { x: x1, y: y1 }, { x: 0, y: y1 }, { x: 0, y: y2 }, { x: x1, y: y2 }, { x: x1, y: this.h }, { x: x2, y: this.h }, { x: x2, y: y2 }, { x: this.w, y: y2 }, { x: this.w, y: y1 }, { x: x2, y: y1 }, { x: x2, y: 0 }])
-            }
-        },
-        "dem": {
-            w: 10, h: 5, relativeCenter: { x: 5, y: 2.5 },
-            makeSvg() {
-                return makeSvgElem("path", { d: `M 0 ${this.h} A ${this.w / 2} ${this.h} 0 0 1 ${this.w} ${this.h} L ${this.w} ${this.h} L 0 ${this.h} Z` })
-            }
-        },
-        "fer": {
-            w: 10, h: 10, relativeCenter: { x: 5, y: 5 },
-            makeSvg() {
-                return makeSvgPolygon([
-                    { x: this.w / 2, y: 0 },
-                    { x: this.w, y: this.h },
-                    { x: this.w / 2, y: this.h / 2 },
-                    { x: 0, y: this.h }])
-            }
-        },
-        "eto": {
-            w: 10, h: 10, relativeCenter: { x: 5, y: 5 },
-            makeSvg() {
-                const outerR = this.w / 2
-                const innerR = outerR * 0.382
-                const points: Point[] = []
-                for (let i = 0; i < 10; i++) {
-                    const angle = -Math.PI / 2 + i * Math.PI / 5
-                    const radius = i % 2 === 0 ? outerR : innerR
-                    points.push({
-                        x: this.relativeCenter.x + radius * Math.cos(angle),
-                        y: this.relativeCenter.y + radius * Math.sin(angle),
-                    })
-                }
-                return makeSvgPolygon(points)
-            }
-        },
-        "vid": {
-            w: 10, h: 10, relativeCenter: { x: 5, y: 5 },
-            makeSvg() {
-                return makeSvgEmpty()
-            },
-            hidden: true,
-        },
+        "car": SquareProp,
+        "rec": RectProp,
+        "tri": TriangleProp,
+        "ron": CircleProp,
+        "ova": OvalProp,
+        "cro": CrossProp,
+        "dem": HalfcircleProp,
+        "fer": SpearheadProp,
+        "eto": StarProp,
+        "vid": EmptyProp,
         "glo": {
             w: 10, h: 10, relativeCenter: { x: 5, y: 5 },
             makeSvg() {
@@ -1446,7 +1520,7 @@ async function main() {
     const initialUrlParams = new URLSearchParams(window.location.search)
     const dialectNameParam = initialUrlParams.get("dialect")
     const langParam = initialUrlParams.get("lang")
-    const showCheatSheet = initialUrlParams.get('cheatsheet') === '1'
+    const showCheatSheet = initialUrlParams.get('cheatsheet') !== '0'
     trySetCurrentLang(langParam)
     const dialect = dialectNameParam !== null && dialectNameParam in AllDialects ? AllDialects[dialectNameParam] : DialectDefault
 
@@ -1554,7 +1628,6 @@ async function main() {
         }
     }, { capture: true })
 
-    codeContainer.spellcheck = false
     codeContainer.addEventListener("input", () => {
         renderAndShow(codeContainer.innerText, true)
     })
