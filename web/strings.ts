@@ -10,7 +10,8 @@ const Strings_en = {
     settings: "Settings",
     lang: "Language",
     dialect: "Dialect",
-    cheatSheet: "Cheat sheet",
+    showCheatSheet: "Show cheat sheet",
+    showPartialInput: "Show partial input",
 }
 
 type Strings = typeof Strings_en
@@ -27,7 +28,8 @@ const Strings_fr = {
     settings: "Réglages",
     lang: "Langue",
     dialect: "Dialecte",
-    cheatSheet: "Aide-mémoire",
+    showCheatSheet: "Afficher l’aide-mémoire",
+    showPartialInput: "Afficher éléments partiels",
 } satisfies Strings
 
 const Strings_de = {
@@ -42,7 +44,8 @@ const Strings_de = {
     settings: "Einstellungen",
     lang: "Sprache",
     dialect: "Dialekt",
-    cheatSheet: "Spickzettel",
+    showCheatSheet: "Spickzettel anzeigen",
+    showPartialInput: "Teilweise Eingabe anzeigen",
 } satisfies Strings
 
 const Strings_it = {
@@ -57,7 +60,8 @@ const Strings_it = {
     settings: "Impostazioni",
     lang: "Lingua",
     dialect: "Dialetto",
-    cheatSheet: "Promemoria",
+    showCheatSheet: "Mostra promemoria",
+    showPartialInput: "Mostra input parziale",
 } satisfies Strings
 
 export const Transations = {

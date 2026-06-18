@@ -407,7 +407,7 @@ type ParseResult = {
     elemToAstMap: WeakMap<HTMLElement, AST>,
 }
 
-function parse(userCode: string, dialect: Dialect): ParseResult {
+function parse(userCode: string, dialect: Dialect, showPartialInput: boolean): ParseResult {
 
     const htmlElements: HTMLElement[] = []
     const elemToAstMap: WeakMap<HTMLElement, AST> = new WeakMap()
@@ -544,7 +544,12 @@ function parse(userCode: string, dialect: Dialect): ParseResult {
         switch (stack.length) {
             case 0: return error(`Invalid input, expected 1 item on stack, got 0`)
             case 1: return { type: "full", ast: stack[0] }
-            default: return { type: "partial", asts: stack }
+            default:
+                if (showPartialInput) {
+                    return { type: "partial", asts: stack }
+                } else {
+                    return error(`Invalid input, expected 1 item on stack, got ${stack.length}`)
+                }
         }
     }
 
@@ -1347,7 +1352,7 @@ async function copySvgToClipboardAsImage(svg: SVGSVGElement, svgStyleElem: Eleme
     }
 }
 
-function createSettingsPopup(currentDialect: Dialect, showCheatSheet: boolean): void {
+function createSettingsPopup(currentDialect: Dialect, showCheatSheet: boolean, showPartialInput: boolean): void {
 
     const settingPopup = document.createElement("details")
     const settingPopupSummary = document.createElement("summary")
@@ -1378,18 +1383,23 @@ function createSettingsPopup(currentDialect: Dialect, showCheatSheet: boolean): 
         gap: "6px",
     })
 
-    const makeSettingRow = (labelText: string, control: HTMLElement): HTMLElement => {
+    const makeSettingRow = (labelText: string, control: HTMLElement, controlFirst: boolean): HTMLElement => {
         const row = document.createElement("label")
         const text = document.createElement("span")
-        text.textContent = `${labelText}: `
+        text.textContent = controlFirst ? labelText : `${labelText}: `
         setStyle(row, {
             display: "flex",
             alignItems: "center",
             gap: "6px",
             whiteSpace: "nowrap",
         })
-        row.appendChild(text)
-        row.appendChild(control)
+        if (controlFirst) {
+            row.appendChild(control)
+            row.appendChild(text)
+        } else {
+            row.appendChild(text)
+            row.appendChild(control)
+        }
         return row
     }
 
@@ -1415,13 +1425,18 @@ function createSettingsPopup(currentDialect: Dialect, showCheatSheet: boolean): 
     cheatSheetInput.type = "checkbox"
     cheatSheetInput.checked = showCheatSheet
 
-    settingPanel.appendChild(makeSettingRow(S("lang"), langSelect))
-    settingPanel.appendChild(makeSettingRow(S("dialect"), dialectSelect))
-    settingPanel.appendChild(makeSettingRow(S("cheatSheet"), cheatSheetInput))
+    const showPartialInputCheckbox = document.createElement("input")
+    showPartialInputCheckbox.type = "checkbox"
+    showPartialInputCheckbox.checked = showPartialInput
+
+    settingPanel.appendChild(makeSettingRow(S("lang"), langSelect, false))
+    settingPanel.appendChild(makeSettingRow(S("dialect"), dialectSelect, false))
+    settingPanel.appendChild(makeSettingRow(S("showCheatSheet"), cheatSheetInput, true))
+    settingPanel.appendChild(makeSettingRow(S("showPartialInput"), showPartialInputCheckbox, true))
     settingPopup.appendChild(settingPanel)
     document.body.appendChild(settingPopup)
 
-    const reloadWithSettings = (settings: { lang?: string, dialect?: string, showCheatSheet?: boolean }): void => {
+    const reloadWithSettings = (settings: { lang?: string, dialect?: string, showCheatSheet?: boolean, showPartialInput?: boolean }): void => {
         const url = new URL(window.location.href)
         if (settings.lang) {
             url.searchParams.set("lang", settings.lang)
@@ -1433,6 +1448,11 @@ function createSettingsPopup(currentDialect: Dialect, showCheatSheet: boolean): 
             url.searchParams.set("cheatsheet", "0")
         } else if (settings.showCheatSheet === true) {
             url.searchParams.delete("cheatsheet")
+        }
+        if (settings.showPartialInput === true) {
+            url.searchParams.set("partial", "1")
+        } else if (settings.showPartialInput === false) {
+            url.searchParams.delete("partial")
         }
         window.location.assign(url.toString())
     }
@@ -1446,11 +1466,14 @@ function createSettingsPopup(currentDialect: Dialect, showCheatSheet: boolean): 
     cheatSheetInput.addEventListener("change", () => {
         reloadWithSettings({ showCheatSheet: cheatSheetInput.checked })
     })
+    showPartialInputCheckbox.addEventListener("change", () => {
+        reloadWithSettings({ showPartialInput: showPartialInputCheckbox.checked })
+    })
 }
 
 function makeCheatSheetContent(dialect: Dialect): string {
     const smallSvgRender = (code: string): Element => {
-        const asts = parse(code, dialect).asts
+        const asts = parse(code, dialect, false).asts
         const ast = asts.type === "full" ? asts.ast : asts.asts[0]
         const svg = astToSVG(ast, 20, background)
         svg.classList.add("objpreview")
@@ -1542,10 +1565,11 @@ async function main() {
     const dialectNameParam = initialUrlParams.get("dialect")
     const langParam = initialUrlParams.get("lang")
     const showCheatSheet = initialUrlParams.get('cheatsheet') !== '0'
+    const showPartialInput = initialUrlParams.get('partial') === '1'
     trySetCurrentLang(langParam)
     const dialect = dialectNameParam !== null && dialectNameParam in AllDialects ? AllDialects[dialectNameParam] : DialectDefault
 
-    createSettingsPopup(dialect, showCheatSheet)
+    createSettingsPopup(dialect, showCheatSheet, showPartialInput)
 
     const setParseStatus = (status: "idle" | "ok" | "error") => {
         switch (status) {
@@ -1785,7 +1809,7 @@ async function main() {
         } else {
 
             try {
-                parseResult = parse(code, dialect)
+                parseResult = parse(code, dialect, showPartialInput)
             } catch (e) {
                 if (e instanceof ParseError) {
                     console.log(`Parse error at position ${e.pos}: ${e.message}`)
