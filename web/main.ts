@@ -1404,11 +1404,14 @@ function createSettingsPopup(currentDialect: Dialect, showCheatSheet: boolean, s
     }
 
     const langSelect = document.createElement("select")
+    const currentLang = getCurrentLang()
     for (const langCode of Object.keys(Transations) as Lang[]) {
         const option = document.createElement("option")
         option.value = langCode
-        option.textContent = langCode.toUpperCase()
-        option.selected = langCode === getCurrentLang()
+        const isCurrent = langCode === currentLang
+        const label = isCurrent ? S(`langName_${langCode}`) : `${S(`langName_${langCode}`, langCode)} (${S(`langName_${langCode}`, currentLang)})`
+        option.textContent = label
+        option.selected = isCurrent
         langSelect.appendChild(option)
     }
 
@@ -1429,11 +1432,15 @@ function createSettingsPopup(currentDialect: Dialect, showCheatSheet: boolean, s
     showPartialInputCheckbox.type = "checkbox"
     showPartialInputCheckbox.checked = showPartialInput
 
-    settingPanel.appendChild(makeSettingRow(S("lang"), langSelect, false))
+    settingPanel.appendChild(makeSettingRow(S("uiLang"), langSelect, false))
     settingPanel.appendChild(makeSettingRow(S("dialect"), dialectSelect, false))
     settingPanel.appendChild(makeSettingRow(S("showCheatSheet"), cheatSheetInput, true))
     settingPanel.appendChild(makeSettingRow(S("showPartialInput"), showPartialInputCheckbox, true))
     settingPopup.appendChild(settingPanel)
+    if (sessionStorage.getItem("openSettings") === "true") {
+        settingPopup.open = true
+        sessionStorage.removeItem("openSettings")
+    }
     document.body.appendChild(settingPopup)
 
     const reloadWithSettings = (settings: { lang?: string, dialect?: string, showCheatSheet?: boolean, showPartialInput?: boolean }): void => {
@@ -1454,6 +1461,7 @@ function createSettingsPopup(currentDialect: Dialect, showCheatSheet: boolean, s
         } else if (settings.showPartialInput === false) {
             url.searchParams.delete("partial")
         }
+        sessionStorage.setItem("openSettings", "true")
         window.location.assign(url.toString())
     }
 

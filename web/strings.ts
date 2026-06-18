@@ -1,4 +1,9 @@
 const Strings_en = {
+    langName_en: "English",
+    langName_fr: "French",
+    langName_de: "German",
+    langName_it: "Italian",
+
     shapes: "Shapes",
     placement: "Placement",
     colors: "Colors",
@@ -8,15 +13,20 @@ const Strings_en = {
     codeCompiles: "Code valid",
     codeHasErrors: "Code has errors",
     settings: "Settings",
-    lang: "Language",
+    uiLang: "UI Language",
     dialect: "Dialect",
-    showCheatSheet: "Show cheat sheet",
-    showPartialInput: "Show partial input",
+    showCheatSheet: "Show Cheat Sheet",
+    showPartialInput: "Show Partial Input",
 }
 
 type Strings = typeof Strings_en
 
 const Strings_fr = {
+    langName_en: "Anglais",
+    langName_fr: "Français",
+    langName_de: "Allemand",
+    langName_it: "Italien",
+
     shapes: "Formes",
     placement: "Poses",
     colors: "Couleurs",
@@ -26,13 +36,18 @@ const Strings_fr = {
     codeCompiles: "Le code est valide",
     codeHasErrors: "Le code est erronné",
     settings: "Réglages",
-    lang: "Langue",
+    uiLang: "Interface",
     dialect: "Dialecte",
     showCheatSheet: "Afficher l’aide-mémoire",
     showPartialInput: "Afficher éléments partiels",
 } satisfies Strings
 
 const Strings_de = {
+    langName_en: "Englisch",
+    langName_fr: "Französisch",
+    langName_de: "Deutsch",
+    langName_it: "Italienisch",
+
     shapes: "Formen",
     placement: "Platzierung",
     colors: "Farben",
@@ -42,13 +57,18 @@ const Strings_de = {
     codeCompiles: "Code ist gültig",
     codeHasErrors: "Code hat Fehler",
     settings: "Einstellungen",
-    lang: "Sprache",
+    uiLang: "Benutzeroberfläche",
     dialect: "Dialekt",
     showCheatSheet: "Spickzettel anzeigen",
     showPartialInput: "Teilweise Eingabe anzeigen",
 } satisfies Strings
 
 const Strings_it = {
+    langName_en: "Inglese",
+    langName_fr: "Francese",
+    langName_de: "Tedesco",
+    langName_it: "Italiano",
+
     shapes: "Forme",
     placement: "Posizionamento",
     colors: "Colori",
@@ -58,7 +78,7 @@ const Strings_it = {
     codeCompiles: "Il codice è valido",
     codeHasErrors: "Il codice ha errori",
     settings: "Impostazioni",
-    lang: "Lingua",
+    uiLang: "Interfaccia",
     dialect: "Dialetto",
     showCheatSheet: "Mostra promemoria",
     showPartialInput: "Mostra input parziale",
@@ -92,6 +112,6 @@ export function trySetCurrentLang(lang: string | null) {
     }
 }
 
-export function S(key: TranslatedString) {
-    return Transations[_currentLang][key]
+export function S(key: TranslatedString, lang? : Lang): string {
+    return Transations[lang ?? _currentLang][key]
 }
