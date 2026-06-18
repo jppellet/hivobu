@@ -1429,9 +1429,9 @@ function createSettingsPopup(currentDialect: Dialect, showCheatSheet: boolean): 
         if (settings.dialect) {
             url.searchParams.set("dialect", settings.dialect)
         }
-        if (settings.showCheatSheet === true) {
-            url.searchParams.set("cheatsheet", "1")
-        } else if (settings.showCheatSheet === false) {
+        if (settings.showCheatSheet === false) {
+            url.searchParams.set("cheatsheet", "0")
+        } else if (settings.showCheatSheet === true) {
             url.searchParams.delete("cheatsheet")
         }
         window.location.assign(url.toString())

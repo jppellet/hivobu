@@ -51,7 +51,7 @@ const Strings_it = {
     colors: "Colori",
     sizes: "Dimensioni",
     rotation: "Rotazione",
-    parseStatus: "Stato dell'analisi",
+    parseStatus: "Stato dell’analisi",
     codeCompiles: "Il codice è valido",
     codeHasErrors: "Il codice ha errori",
     settings: "Impostazioni",
