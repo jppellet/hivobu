@@ -475,7 +475,7 @@ function parse(userCode: string, dialect: Dialect, showPartialInput: boolean): P
                     const cstSecond = stack.pop()!
                     const cstFirst = stack.pop()!
                     const invertArgs = opts?.argOrderDict && token in opts.argOrderDict && opts.argOrderDict[token].invertArgs
-                    console.log("argOrderDict", opts?.argOrderDict)
+                    // console.log("argOrderDict", opts?.argOrderDict)
                     if (invertArgs) {
                         argsObj.second = cstFirst
                         argsObj.first = cstSecond
@@ -505,7 +505,7 @@ function parse(userCode: string, dialect: Dialect, showPartialInput: boolean): P
         return undefined
     }
 
-    const parseExpr = (): ParsedExpr => {
+    const parseExpr = (inDef: boolean): ParsedExpr => {
         let ast
         while (c < currentLine.length) {
             if (tryMatchFrom(NoOps, "noop", 0))
@@ -541,15 +541,25 @@ function parse(userCode: string, dialect: Dialect, showPartialInput: boolean): P
             return error(`Unknown token at position ${c}: ${currentLine.slice(c)}`)
         }
 
-        switch (stack.length) {
-            case 0: return error(`Invalid input, expected 1 item on stack, got 0`)
-            case 1: return { type: "full", ast: stack[0] }
-            default:
-                if (showPartialInput) {
-                    return { type: "partial", asts: stack }
-                } else {
-                    return error(`Invalid input, expected 1 item on stack, got ${stack.length}`)
-                }
+        if (inDef) {
+            // definition after the = sign, should always be complete
+            if (stack.length !== 1) {
+                return error(`Invalid definition, expected exactly 1 item on stack at the end of the line, got ${stack.length}: ${stack.map(ast => String(ast)).join(", ")}`)
+            }
+            return { type: "full", ast: stack.pop()! }
+
+        } else {
+            // main expression
+            switch (stack.length) {
+                case 0: return error(`Invalid input, expected 1 item on stack, got 0`)
+                case 1: return { type: "full", ast: stack[0] }
+                default:
+                    if (showPartialInput) {
+                        return { type: "partial", asts: stack }
+                    } else {
+                        return error(`Invalid input, expected 1 item on stack, got ${stack.length}: ${stack.map(ast => pretty(ast)).join(", ")}`)
+                    }
+            }
         }
     }
 
@@ -573,9 +583,9 @@ function parse(userCode: string, dialect: Dialect, showPartialInput: boolean): P
         }
         c += nameRaw.length + 1
 
-        const parsedDefinition = parseExpr()
+        const parsedDefinition = parseExpr(true)
         if (parsedDefinition.type === "partial") {
-            return error(`Incomplete definition for ${name}`)
+            return error(`Incomplete definition for ${name}; asts: ${parsedDefinition.asts.map(ast => String(ast)).join(", ")}`)
         }
         const definition = parsedDefinition.ast
         defs.set(name, definition)
@@ -598,7 +608,7 @@ function parse(userCode: string, dialect: Dialect, showPartialInput: boolean): P
             if (currentLine.includes("=")) {
                 parseDef()
             } else {
-                const parsedExpr = parseExpr()
+                const parsedExpr = parseExpr(false)
                 const asts = parsedExpr.type === "full" ? [parsedExpr.ast] : parsedExpr.asts
                 for (const ast of asts) {
                     htmlElements.push(ast.builtObjElem)
@@ -1979,7 +1989,7 @@ async function main() {
         }
         const usePush = !isValidCode && lastSavedWasValid
         const method = usePush ? "pushState" : "replaceState"
-        console.log("saving", { valid: isValidCode, method, code })
+        // console.log("saving", { valid: isValidCode, method, code })
         window.history[method]({ code }, '', url.toString())
         lastSavedWasValid = isValidCode
     }
