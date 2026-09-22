@@ -1362,7 +1362,7 @@ async function copySvgToClipboardAsImage(svg: SVGSVGElement, svgStyleElem: Eleme
     }
 }
 
-function createSettingsPopup(currentDialect: Dialect, showCheatSheet: boolean, showPartialInput: boolean): void {
+function createSettingsPopup(currentDialect: Dialect, showCheatSheet: boolean, cheatSheetButtons: boolean, showPartialInput: boolean): void {
 
     const settingPopup = document.createElement("details")
     const settingPopupSummary = document.createElement("summary")
@@ -1438,6 +1438,10 @@ function createSettingsPopup(currentDialect: Dialect, showCheatSheet: boolean, s
     cheatSheetInput.type = "checkbox"
     cheatSheetInput.checked = showCheatSheet
 
+    const cheatSheetButtonsCheckbox = document.createElement("input")
+    cheatSheetButtonsCheckbox.type = "checkbox"
+    cheatSheetButtonsCheckbox.checked = cheatSheetButtons
+
     const showPartialInputCheckbox = document.createElement("input")
     showPartialInputCheckbox.type = "checkbox"
     showPartialInputCheckbox.checked = showPartialInput
@@ -1445,6 +1449,7 @@ function createSettingsPopup(currentDialect: Dialect, showCheatSheet: boolean, s
     settingPanel.appendChild(makeSettingRow(S("uiLang"), langSelect, false))
     settingPanel.appendChild(makeSettingRow(S("dialect"), dialectSelect, false))
     settingPanel.appendChild(makeSettingRow(S("showCheatSheet"), cheatSheetInput, true))
+    settingPanel.appendChild(makeSettingRow(S("cheatSheetButtons"), cheatSheetButtonsCheckbox, true))
     settingPanel.appendChild(makeSettingRow(S("showPartialInput"), showPartialInputCheckbox, true))
     settingPopup.appendChild(settingPanel)
     if (sessionStorage.getItem("openSettings") === "true") {
@@ -1453,7 +1458,7 @@ function createSettingsPopup(currentDialect: Dialect, showCheatSheet: boolean, s
     }
     document.body.appendChild(settingPopup)
 
-    const reloadWithSettings = (settings: { lang?: string, dialect?: string, showCheatSheet?: boolean, showPartialInput?: boolean }): void => {
+    const reloadWithSettings = (settings: { lang?: string, dialect?: string, showCheatSheet?: boolean, cheatSheetButtons?: boolean, showPartialInput?: boolean }): void => {
         const url = new URL(window.location.href)
         if (settings.lang) {
             url.searchParams.set("lang", settings.lang)
@@ -1465,6 +1470,11 @@ function createSettingsPopup(currentDialect: Dialect, showCheatSheet: boolean, s
             url.searchParams.set("cheatsheet", "0")
         } else if (settings.showCheatSheet === true) {
             url.searchParams.delete("cheatsheet")
+        }
+        if (settings.cheatSheetButtons === false) {
+            url.searchParams.set("cheatbuttons", "0")
+        } else if (settings.cheatSheetButtons === true) {
+            url.searchParams.delete("cheatbuttons")
         }
         if (settings.showPartialInput === true) {
             url.searchParams.set("partial", "1")
@@ -1484,12 +1494,15 @@ function createSettingsPopup(currentDialect: Dialect, showCheatSheet: boolean, s
     cheatSheetInput.addEventListener("change", () => {
         reloadWithSettings({ showCheatSheet: cheatSheetInput.checked })
     })
+    cheatSheetButtonsCheckbox.addEventListener("change", () => {
+        reloadWithSettings({ cheatSheetButtons: cheatSheetButtonsCheckbox.checked })
+    })
     showPartialInputCheckbox.addEventListener("change", () => {
         reloadWithSettings({ showPartialInput: showPartialInputCheckbox.checked })
     })
 }
 
-function makeCheatSheetContent(dialect: Dialect): string {
+function makeCheatSheetContent(dialect: Dialect, useButtons: boolean): string {
     const smallSvgRender = (code: string): Element => {
         const asts = parse(code, dialect, false).asts
         const ast = asts.type === "full" ? asts.ast : asts.asts[0]
@@ -1500,30 +1513,37 @@ function makeCheatSheetContent(dialect: Dialect): string {
 
     const unbreakableSpan = (content: string) => `<span style="white-space: nowrap;">${content}</span>`
     const sep = `<span style="font-size:120%; padding: 0 1ex;"> </span>`
-    const colSpan = (colcode: string) => `<span style="padding: 1px; border: 3px solid ${dialect.colorProps[colcode]}">${capitalize(colcode)}</span>`
-    const objSpan = (objcode: string) => `<span>${capitalize(objcode)}${smallSvgRender(dialect.mkPreviewString(objcode)).outerHTML}</span>`
+    const asCheatSheetButton = (code: string, content: string, extraStyle = "") => {
+        if (!useButtons) {
+            return `<span style="${extraStyle}">${content}</span>`
+        }
+        return `<button type="button" class="cheatsheet-button" data-code="${code}" style="${extraStyle}">${content}</button>`
+    }
+    const colSpan = (colcode: string) => asCheatSheetButton(colcode, colcode, `padding: 1px; border: 3px solid ${dialect.colorProps[colcode.toLowerCase()]}`)
+    const objSpan = (objcode: string) => asCheatSheetButton(objcode, `${objcode}${smallSvgRender(dialect.mkPreviewString(objcode)).outerHTML}`)
     const objs = Object.keys(dialect.objectProps).filter(obj => dialect.objectProps[obj].hidden !== true)
 
     const mkSection = (title: string, items: readonly string[], sectionSep: string, map: (item: string) => string = (item) => item): string => {
         if (items.length === 0) {
             return ""
         }
-        return `<b>${title}:</b> ${items.map(map).join(sectionSep)}`
+        return `<b>${title}:</b> ${items.map(item => map(capitalize(item))).join(sectionSep)}`
     }
 
     const cheatSheetSections = [[
         mkSection(S("shapes"), objs, " ", objSpan),
-        mkSection(S("placement"), Object.entries(dialect.poseProps).filter(([_, v]) => v.primary === true).map(([k]) => k), " ", capitalize),
+        mkSection(S("placement"), Object.entries(dialect.poseProps).filter(([_, v]) => v.primary === true).map(([k]) => k), " ", item => asCheatSheetButton(item, item)),
     ], [
         mkSection(S("colors"), dialect.allColors, " ", colSpan),
-        mkSection(S("sizes"), dialect.allSizes, " "),
+        mkSection(S("sizes"), dialect.allSizes, " ", item => asCheatSheetButton(item, item)),
         mkSection(S("rotation"),
             dialect.rotation === true
                 ? ["45", "90", "180", "270", "etc."]
                 : dialect.rotation
                     ? Object.entries(dialect.rotation).map(([token, degrees]) => `${token}`)
                     : [],
-            " "),
+            " ",
+            item => dialect.rotation === true ? item : asCheatSheetButton(item, item)),
     ]]
 
     return cheatSheetSections.map(subsection => subsection.map(unbreakableSpan).join(sep)).join("<br>")
@@ -1583,11 +1603,12 @@ async function main() {
     const dialectNameParam = initialUrlParams.get("dialect")
     const langParam = initialUrlParams.get("lang")
     const showCheatSheet = initialUrlParams.get('cheatsheet') !== '0'
+    const cheatSheetButtons = initialUrlParams.get('cheatbuttons') !== '0'
     const showPartialInput = initialUrlParams.get('partial') === '1'
     trySetCurrentLang(langParam)
     const dialect = dialectNameParam !== null && dialectNameParam in AllDialects ? AllDialects[dialectNameParam] : DialectDefault
 
-    createSettingsPopup(dialect, showCheatSheet, showPartialInput)
+    createSettingsPopup(dialect, showCheatSheet, cheatSheetButtons, showPartialInput)
 
     const setParseStatus = (status: "idle" | "ok" | "error") => {
         switch (status) {
@@ -1635,7 +1656,8 @@ async function main() {
             })
     })
 
-    cheatSheetContainer.innerHTML = makeCheatSheetContent(dialect)
+    cheatSheetContainer.innerHTML = makeCheatSheetContent(dialect, cheatSheetButtons)
+    cheatSheetContainer.classList.toggle("buttons-enabled", cheatSheetButtons)
 
     let currentAst: AST | undefined = undefined
 
@@ -1704,6 +1726,14 @@ async function main() {
         // e.stopPropagation()
         sel.selectAllChildren(e.target)
     }, { capture: true })
+
+    if (cheatSheetButtons) {
+        cheatSheetContainer.addEventListener("pointerdown", e => {
+            if (e.target instanceof Element && e.target.closest(".cheatsheet-button")) {
+                e.preventDefault()
+            }
+        })
+    }
 
     const ArgKeys = ["arg", "first", "second"] as const
     type ArgType = typeof ArgKeys[number]
@@ -1974,6 +2004,31 @@ async function main() {
             const isValidCode = parseResult !== undefined
             saveToURL(code, isValidCode)
         }
+    }
+
+    if (cheatSheetButtons) {
+        cheatSheetContainer.addEventListener("click", e => {
+            const button = e.target instanceof Element ? e.target.closest(".cheatsheet-button") : null
+            if (!(button instanceof HTMLElement)) {
+                return
+            }
+            const code = button.dataset.code
+            if (code === undefined) {
+                return
+            }
+
+            e.preventDefault()
+            const currentCode = codeContainer.innerText
+            const selectionOffsets = getSelectionOffsetsWithin(codeContainer) ?? { start: currentCode.length, end: currentCode.length }
+            const start = Math.min(selectionOffsets.start, selectionOffsets.end)
+            const end = Math.max(selectionOffsets.start, selectionOffsets.end)
+            const updatedCode = `${currentCode.slice(0, start)}${code}${currentCode.slice(end)}`
+            const caretOffset = start + code.length
+
+            renderAndShow(updatedCode, true)
+            restoreSelectionOffsetsWithin(codeContainer, caretOffset, caretOffset)
+            codeContainer.focus({ preventScroll: true })
+        })
     }
 
     let saveToURL: (code: string, isValidCode: boolean) => void

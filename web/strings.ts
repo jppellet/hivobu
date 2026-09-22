@@ -16,6 +16,7 @@ const Strings_en = {
     uiLang: "UI Language",
     dialect: "Dialect",
     showCheatSheet: "Show Cheat Sheet",
+    cheatSheetButtons: "Cheat Sheet Buttons",
     showPartialInput: "Show Partial Input",
 }
 
@@ -39,6 +40,7 @@ const Strings_fr = {
     uiLang: "Interface",
     dialect: "Dialecte",
     showCheatSheet: "Afficher l’aide-mémoire",
+    cheatSheetButtons: "Boutons dans l’aide-mémoire",
     showPartialInput: "Afficher éléments partiels",
 } satisfies Strings
 
@@ -60,6 +62,7 @@ const Strings_de = {
     uiLang: "Benutzeroberfläche",
     dialect: "Dialekt",
     showCheatSheet: "Spickzettel anzeigen",
+    cheatSheetButtons: "Schaltflächen im Spickzettel",
     showPartialInput: "Teilweise Eingabe anzeigen",
 } satisfies Strings
 
@@ -81,6 +84,7 @@ const Strings_it = {
     uiLang: "Interfaccia",
     dialect: "Dialetto",
     showCheatSheet: "Mostra promemoria",
+    cheatSheetButtons: "Pulsanti nel promemoria",
     showPartialInput: "Mostra input parziale",
 } satisfies Strings
 
