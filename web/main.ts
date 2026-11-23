@@ -1471,9 +1471,9 @@ function createSettingsPopup(currentDialect: Dialect, showCheatSheet: boolean, c
         } else if (settings.showCheatSheet === true) {
             url.searchParams.delete("cheatsheet")
         }
-        if (settings.cheatSheetButtons === false) {
-            url.searchParams.set("cheatbuttons", "0")
-        } else if (settings.cheatSheetButtons === true) {
+        if (settings.cheatSheetButtons === true) {
+            url.searchParams.set("cheatbuttons", "1")
+        } else if (settings.cheatSheetButtons === false) {
             url.searchParams.delete("cheatbuttons")
         }
         if (settings.showPartialInput === true) {
@@ -1603,7 +1603,7 @@ async function main() {
     const dialectNameParam = initialUrlParams.get("dialect")
     const langParam = initialUrlParams.get("lang")
     const showCheatSheet = initialUrlParams.get('cheatsheet') !== '0'
-    const cheatSheetButtons = initialUrlParams.get('cheatbuttons') !== '0'
+    const cheatSheetButtons = initialUrlParams.get('cheatbuttons') === '1'
     const showPartialInput = initialUrlParams.get('partial') === '1'
     trySetCurrentLang(langParam)
     const dialect = dialectNameParam !== null && dialectNameParam in AllDialects ? AllDialects[dialectNameParam] : DialectDefault
